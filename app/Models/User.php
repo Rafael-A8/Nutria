@@ -48,4 +48,9 @@ class User extends Authenticatable
     {
         return $this->hasMany(WeightLog::class);
     }
+
+    public function chatMessages(): HasMany
+    {
+        return $this->hasMany(ChatMessage::class);
+    }
 }

@@ -13,6 +13,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::get('/chat', [ChatController::class, 'index'])->name('chat.index');
     Route::post('/chat/send', [ChatController::class, 'sendMessage'])->name('chat.send');
+    Route::post('/chat/send-audio', [ChatController::class, 'sendAudioMessage'])->name('chat.send-audio');
 });
 
 require __DIR__.'/settings.php';
