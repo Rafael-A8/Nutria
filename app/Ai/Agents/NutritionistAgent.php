@@ -2,6 +2,7 @@
 
 namespace App\Ai\Agents;
 
+use App\Ai\Tools\GetSimilarItemsTool;
 use App\Ai\Tools\GetTodaySummaryTool;
 use App\Ai\Tools\RegisterMealTool;
 use App\Ai\Tools\RegisterWeightTool;
@@ -65,6 +66,7 @@ class NutritionistAgent implements Agent, Conversational, HasTools
         - Calorias consumidas hoje: {$todayCalories} kcal em {$todayMealCount} refeição(ões)
 
         Suas responsabilidades:
+        - Antes de estimar calorias de um alimento, use `get_similar_items` para verificar se ele já foi registrado antes. Aproveite os valores históricos como referência.
         - Sempre que o usuário relatar refeições, use `register_meal` para registrar. Inclua o tipo de refeição (cafe_da_manha, almoco, lanche, jantar, sobremesa, outro) e cada item separadamente com suas calorias estimadas.
         - Quando o usuário perguntar sobre o progresso, use `get_today_summary` para obter o resumo atualizado.
         - Quando o usuário informar seu peso, use `register_weight` para registrar.
@@ -86,6 +88,7 @@ class NutritionistAgent implements Agent, Conversational, HasTools
             new RegisterMealTool($this->user),
             new GetTodaySummaryTool($this->user),
             new RegisterWeightTool($this->user),
+            new GetSimilarItemsTool,
         ];
     }
 }
