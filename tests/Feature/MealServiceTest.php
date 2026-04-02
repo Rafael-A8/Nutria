@@ -3,6 +3,8 @@
 use App\Models\User;
 use App\Services\MealService;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
+use Laravel\Ai\Embeddings;
 
 beforeEach(function () {
     $this->user = User::factory()->create();
@@ -30,7 +32,9 @@ it('registers a meal with custom consumed_at', function () {
     expect($meal->consumed_at->toDateTimeString())->toBe('2026-03-15 12:00:00');
 });
 
-it('adds an item to a meal', function () {
+it('adds an item to a meal and generates embedding', function () {
+    Embeddings::fake();
+
     $meal = $this->service->registerMeal($this->user, 'almoco');
     $item = $this->service->addItem($meal, 'arroz', 150, 195);
 
@@ -38,23 +42,48 @@ it('adds an item to a meal', function () {
         ->meal_id->toBe($meal->id)
         ->description->toBe('arroz')
         ->quantity_grams->toBe(150)
-        ->calories->toBe(195);
+        ->calories->toBe(195)
+        ->embedding->toBeArray();
 
     $this->assertDatabaseHas('meal_items', [
         'id' => $item->id,
         'meal_id' => $meal->id,
         'description' => 'arroz',
     ]);
+
+    Embeddings::assertGenerated(fn ($prompt) => $prompt->contains('arroz'));
 });
 
 it('adds an item without quantity_grams', function () {
+    Embeddings::fake();
+
     $meal = $this->service->registerMeal($this->user, 'lanche');
     $item = $this->service->addItem($meal, 'coxinha', null, 300);
 
     expect($item->quantity_grams)->toBeNull();
 });
 
+it('finds similar items by description', function () {
+    Embeddings::fake();
+
+    $meal = $this->service->registerMeal($this->user, 'almoco');
+    $this->service->addItem($meal, 'arroz branco', 150, 195);
+    $this->service->addItem($meal, 'feijão preto', 100, 77);
+
+    $similar = $this->service->findSimilarItems('arroz');
+
+    expect($similar)->toBeInstanceOf(Collection::class);
+});
+
+it('returns empty collection when no similar items exist', function () {
+    $similar = $this->service->findSimilarItems('pizza');
+
+    expect($similar)->toBeEmpty();
+});
+
 it('gets today summary', function () {
+    Embeddings::fake();
+
     $meal = $this->service->registerMeal($this->user, 'almoco');
     $this->service->addItem($meal, 'arroz', 150, 195);
     $this->service->addItem($meal, 'feijão', 100, 77);
@@ -71,6 +100,8 @@ it('gets today summary', function () {
 });
 
 it('does not include other users meals in summary', function () {
+    Embeddings::fake();
+
     $otherUser = User::factory()->create();
     $meal = $this->service->registerMeal($otherUser, 'almoco');
     $this->service->addItem($meal, 'arroz', 150, 195);
@@ -81,6 +112,8 @@ it('does not include other users meals in summary', function () {
 });
 
 it('gets week summary', function () {
+    Embeddings::fake();
+
     Carbon::setTestNow(Carbon::parse('2026-04-02 12:00:00'));
 
     $yesterday = Carbon::parse('2026-04-01 12:00:00');

@@ -6,6 +6,8 @@ use App\Models\Meal;
 use App\Models\MealItem;
 use App\Models\User;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
+use Laravel\Ai\Embeddings;
 
 class MealService
 {
@@ -19,11 +21,32 @@ class MealService
 
     public function addItem(Meal $meal, string $description, ?int $quantityGrams, int $calories): MealItem
     {
-        return $meal->items()->create([
+        $item = $meal->items()->create([
             'description' => $description,
             'quantity_grams' => $quantityGrams,
             'calories' => $calories,
         ]);
+
+        $response = Embeddings::for([$description])
+            ->dimensions(1536)
+            ->generate();
+
+        $item->embedding = $response->first();
+        $item->save();
+
+        return $item;
+    }
+
+    /**
+     * @return Collection<int, MealItem>
+     */
+    public function findSimilarItems(string $description, int $limit = 5): Collection
+    {
+        return MealItem::query()
+            ->whereNotNull('embedding')
+            ->whereVectorSimilarTo('embedding', $description, minSimilarity: 0.4)
+            ->limit($limit)
+            ->get();
     }
 
     /**
