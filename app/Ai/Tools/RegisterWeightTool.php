@@ -3,13 +3,13 @@
 namespace App\Ai\Tools;
 
 use App\Models\User;
-use App\Services\MealService;
+use App\Services\WeightLogService;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Tools\Request;
 use Stringable;
 
-class GetTodaySummaryTool implements Tool
+class RegisterWeightTool implements Tool
 {
     public function __construct(protected User $user) {}
 
@@ -18,7 +18,7 @@ class GetTodaySummaryTool implements Tool
      */
     public function description(): Stringable|string
     {
-        return 'Retorna o resumo de calorias consumidas pelo usuário no dia de hoje, com detalhamento por refeição.';
+        return 'Registra o peso do usuário. Use quando o usuário informar seu peso atual.';
     }
 
     /**
@@ -28,7 +28,9 @@ class GetTodaySummaryTool implements Tool
      */
     public function schema(JsonSchema $schema): array
     {
-        return [];
+        return [
+            'weight_kg' => $schema->number()->description('Peso em quilogramas.')->required(),
+        ];
     }
 
     /**
@@ -36,15 +38,9 @@ class GetTodaySummaryTool implements Tool
      */
     public function handle(Request $request): Stringable|string
     {
-        $service = new MealService;
-        $summary = $service->getTodaySummary($this->user);
+        $service = new WeightLogService;
+        $weightLog = $service->log($this->user, $request['weight_kg']);
 
-        $lines = ["Total de calorias hoje: {$summary['total_calories']} kcal em {$summary['meal_count']} refeição(ões)."];
-
-        foreach ($summary['meals'] as $meal) {
-            $lines[] = "- {$meal['meal_type']}: {$meal['calories']} kcal";
-        }
-
-        return implode("\n", $lines);
+        return "Peso registrado: {$weightLog->weight_kg} kg em {$weightLog->logged_at->format('d/m/Y H:i')}.";
     }
 }
