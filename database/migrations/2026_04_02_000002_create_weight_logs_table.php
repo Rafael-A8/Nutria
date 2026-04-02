@@ -8,17 +8,17 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('meals', function (Blueprint $table) {
+        Schema::create('weight_logs', function (Blueprint $table) {
             $table->id();
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
-            $table->string('meal_type');
-            $table->timestamp('consumed_at');
+            $table->decimal('weight_kg', 5, 2);
+            $table->timestamp('logged_at');
             $table->timestamps();
         });
     }
 
     public function down(): void
     {
-        Schema::dropIfExists('meals');
+        Schema::dropIfExists('weight_logs');
     }
 };

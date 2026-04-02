@@ -8,18 +8,20 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('profiles', function (Blueprint $table) {
+        Schema::create('user_profiles', function (Blueprint $table) {
             $table->id();
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
-            $table->float('weight')->nullable();
-            $table->float('height')->nullable();
-            $table->integer('daily_calorie_goal');
+            $table->string('gender');
+            $table->date('birth_date');
+            $table->integer('height_cm');
+            $table->string('goal');
+            $table->string('activity_level');
             $table->timestamps();
         });
     }
 
     public function down(): void
     {
-        Schema::dropIfExists('profiles');
+        Schema::dropIfExists('user_profiles');
     }
 };
