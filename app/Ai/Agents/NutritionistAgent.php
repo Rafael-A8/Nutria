@@ -2,13 +2,17 @@
 
 namespace App\Ai\Agents;
 
+use App\Ai\Tools\GetPeriodSummaryTool;
 use App\Ai\Tools\GetSimilarItemsTool;
 use App\Ai\Tools\GetTodaySummaryTool;
 use App\Ai\Tools\RegisterMealTool;
 use App\Ai\Tools\RegisterWeightTool;
 use App\Models\User;
+use App\Services\ChatMessageService;
 use App\Services\MealService;
+use App\Services\SummaryService;
 use App\Services\WeightLogService;
+use Illuminate\Support\Carbon;
 use Laravel\Ai\Attributes\MaxSteps;
 use Laravel\Ai\Attributes\Model;
 use Laravel\Ai\Attributes\Provider;
@@ -51,7 +55,7 @@ class NutritionistAgent implements Agent, Conversational, HasTools
         $todayCalories = $todaySummary['total_calories'];
         $todayMealCount = $todaySummary['meal_count'];
 
-        return <<<PROMPT
+        $prompt = <<<PROMPT
         Você é Morgan, um nutricionista virtual empático, acolhedor e especializado em saúde alimentar.
         Você está conversando com {$name}.
 
@@ -73,8 +77,28 @@ class NutritionistAgent implements Agent, Conversational, HasTools
         - Ofereça dicas nutricionais personalizadas e positivas com base no contexto.
         - Seja encorajador quando o progresso estiver bom e cuidadoso (sem julgamentos) quando ultrapassar metas.
         - Leve em conta a semana inteira nas avaliações — um dia mais pesado com uma semana leve está tudo bem.
+        - Quando o usuário perguntar sobre um período passado (ex: "como foi meu janeiro?", "como me saí na última semana?"), use `get_period_summary` para obter os dados detalhados.
         - Responda sempre em português do Brasil de forma clara, humana e motivadora.
         PROMPT;
+
+        $summaryService = new SummaryService(
+            new MealService,
+            new WeightLogService,
+            new ChatMessageService,
+        );
+        $recentSummaries = $summaryService->getRecentSummaries($this->user);
+
+        if ($recentSummaries->isNotEmpty()) {
+            $summaryContext = $recentSummaries->map(function ($summary) {
+                $monthName = Carbon::createFromDate($summary->year, $summary->month, 1)->translatedFormat('F Y');
+
+                return "### {$monthName}\n{$summary->summary}";
+            })->implode("\n\n");
+
+            $prompt .= "\n\nResumo dos meses anteriores (use para contexto, não repita ao usuário a menos que pergunte):\n{$summaryContext}";
+        }
+
+        return $prompt;
     }
 
     /**
@@ -89,6 +113,7 @@ class NutritionistAgent implements Agent, Conversational, HasTools
             new GetTodaySummaryTool($this->user),
             new RegisterWeightTool($this->user),
             new GetSimilarItemsTool,
+            new GetPeriodSummaryTool($this->user),
         ];
     }
 }

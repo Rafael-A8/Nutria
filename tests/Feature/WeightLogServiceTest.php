@@ -53,3 +53,37 @@ it('does not return weight from another user', function () {
 
     expect($latest)->toBeNull();
 });
+
+it('gets period weights', function () {
+    $this->service->log($this->user, 80.0, Carbon::parse('2026-03-01'));
+    $this->service->log($this->user, 78.5, Carbon::parse('2026-03-15'));
+    $this->service->log($this->user, 77.0, Carbon::parse('2026-03-31'));
+
+    $result = $this->service->getPeriodWeights(
+        $this->user,
+        Carbon::parse('2026-03-01'),
+        Carbon::parse('2026-03-31'),
+    );
+
+    expect($result)
+        ->start_weight->toEqual(80.0)
+        ->end_weight->toEqual(77.0)
+        ->min_weight->toEqual(77.0)
+        ->max_weight->toEqual(80.0)
+        ->entries->toBe(3);
+});
+
+it('returns empty period weights when no logs exist', function () {
+    $result = $this->service->getPeriodWeights(
+        $this->user,
+        Carbon::parse('2026-03-01'),
+        Carbon::parse('2026-03-31'),
+    );
+
+    expect($result)
+        ->start_weight->toBeNull()
+        ->end_weight->toBeNull()
+        ->min_weight->toBeNull()
+        ->max_weight->toBeNull()
+        ->entries->toBe(0);
+});

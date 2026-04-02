@@ -132,3 +132,51 @@ it('gets week summary', function () {
 
     Carbon::setTestNow();
 });
+
+it('gets period summary', function () {
+    Embeddings::fake();
+
+    $startDate = Carbon::parse('2026-03-01');
+    $endDate = Carbon::parse('2026-03-31');
+
+    $meal1 = $this->service->registerMeal($this->user, 'almoco', Carbon::parse('2026-03-10 12:00:00'));
+    $this->service->addItem($meal1, 'arroz', 150, 200);
+    $this->service->addItem($meal1, 'feijão', 100, 80);
+
+    $meal2 = $this->service->registerMeal($this->user, 'jantar', Carbon::parse('2026-03-10 19:00:00'));
+    $this->service->addItem($meal2, 'arroz', 150, 200);
+
+    $meal3 = $this->service->registerMeal($this->user, 'almoco', Carbon::parse('2026-03-15 12:00:00'));
+    $this->service->addItem($meal3, 'pizza', null, 800);
+
+    $summary = $this->service->getPeriodSummary($this->user, $startDate, $endDate);
+
+    expect($summary)
+        ->total_calories->toBe(1280)
+        ->avg_daily_calories->toBe(640)
+        ->total_meals->toBe(3)
+        ->total_items->toBe(4)
+        ->days_tracked->toBe(2)
+        ->top_items->toHaveCount(3);
+
+    expect($summary['top_items'][0])
+        ->description->toBe('arroz')
+        ->count->toBe(2)
+        ->avg_calories->toBe(200);
+});
+
+it('returns zero period summary when no meals exist', function () {
+    $summary = $this->service->getPeriodSummary(
+        $this->user,
+        Carbon::parse('2026-03-01'),
+        Carbon::parse('2026-03-31'),
+    );
+
+    expect($summary)
+        ->total_calories->toBe(0)
+        ->avg_daily_calories->toBe(0)
+        ->total_meals->toBe(0)
+        ->total_items->toBe(0)
+        ->days_tracked->toBe(0)
+        ->top_items->toBeEmpty();
+});

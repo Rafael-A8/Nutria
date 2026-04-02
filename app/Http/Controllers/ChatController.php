@@ -7,6 +7,7 @@ use App\Http\Requests\SendAudioMessageRequest;
 use App\Http\Requests\SendMessageRequest;
 use App\Models\User;
 use App\Services\ChatMessageService;
+use App\Services\SummaryService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -17,6 +18,7 @@ class ChatController extends Controller
 {
     public function __construct(
         private ChatMessageService $chatMessageService,
+        private SummaryService $summaryService,
     ) {}
 
     /**
@@ -73,6 +75,10 @@ class ChatController extends Controller
         $agent = new NutritionistAgent($user);
 
         $conversationId = $this->getCurrentMonthConversationId($user->id);
+
+        if (! $conversationId) {
+            $this->summaryService->generateIfNeeded($user);
+        }
 
         if ($conversationId) {
             $response = $agent->continue($conversationId, as: $user)

@@ -86,4 +86,40 @@ class MealService
             ->map(fn ($meals) => $meals->flatMap->items->sum('calories'))
             ->all();
     }
+
+    /**
+     * @return array{total_calories: int, avg_daily_calories: int, total_meals: int, total_items: int, days_tracked: int, top_items: array<int, array{description: string, count: int, avg_calories: int}>}
+     */
+    public function getPeriodSummary(User $user, Carbon $startDate, Carbon $endDate): array
+    {
+        $meals = $user->meals()
+            ->with('items')
+            ->whereBetween('consumed_at', [$startDate->startOfDay(), $endDate->endOfDay()])
+            ->get();
+
+        $allItems = $meals->flatMap->items;
+        $totalCalories = $allItems->sum('calories');
+        $daysTracked = $meals->groupBy(fn (Meal $meal) => $meal->consumed_at->toDateString())->count();
+
+        $topItems = $allItems
+            ->groupBy('description')
+            ->map(fn (Collection $items) => [
+                'description' => $items->first()->description,
+                'count' => $items->count(),
+                'avg_calories' => (int) round($items->avg('calories')),
+            ])
+            ->sortByDesc('count')
+            ->take(5)
+            ->values()
+            ->all();
+
+        return [
+            'total_calories' => $totalCalories,
+            'avg_daily_calories' => $daysTracked > 0 ? (int) round($totalCalories / $daysTracked) : 0,
+            'total_meals' => $meals->count(),
+            'total_items' => $allItems->count(),
+            'days_tracked' => $daysTracked,
+            'top_items' => $topItems,
+        ];
+    }
 }
