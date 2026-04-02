@@ -3,8 +3,6 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
-use App\Models\Meal;
-use App\Models\Profile;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -44,5 +42,10 @@ class User extends Authenticatable
     public function meals(): HasMany
     {
         return $this->hasMany(Meal::class);
+    }
+
+    public function weightLogs(): HasMany
+    {
+        return $this->hasMany(WeightLog::class);
     }
 }

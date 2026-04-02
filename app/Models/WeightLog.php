@@ -3,30 +3,21 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Attributes\Fillable;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['user_id', 'meal_type', 'consumed_at'])]
-class Meal extends Model
+#[Fillable(['user_id', 'weight_kg', 'logged_at'])]
+class WeightLog extends Model
 {
-    use HasFactory;
-
     protected function casts(): array
     {
         return [
-            'consumed_at' => 'datetime',
+            'logged_at' => 'datetime',
         ];
     }
 
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
-    }
-
-    public function items(): HasMany
-    {
-        return $this->hasMany(MealItem::class);
     }
 }
