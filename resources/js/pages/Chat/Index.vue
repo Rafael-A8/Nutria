@@ -1,11 +1,10 @@
 <script setup lang="ts">
-import { nextTick, onMounted, ref } from 'vue';
+import { nextTick, onMounted, ref, watch } from 'vue';
 import { Head, usePage } from '@inertiajs/vue3';
 import { Mic, SendHorizontal, Square, Utensils } from 'lucide-vue-next';
 import { sendAudioMessage, sendMessage } from '@/actions/App/Http/Controllers/ChatController';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import type { BreadcrumbItem, ChatMessage, User } from '@/types';
 
 interface DisplayMessage {
@@ -45,6 +44,17 @@ if (props.chatMessages.length > 0) {
 const messageInput = ref('');
 const isLoading = ref(false);
 const messagesContainer = ref<HTMLDivElement | null>(null);
+const textareaRef = ref<HTMLTextAreaElement | null>(null);
+
+function resizeTextarea(): void {
+    const el = textareaRef.value;
+    if (el) {
+        el.style.height = 'auto';
+        el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+    }
+}
+
+watch(messageInput, () => nextTick(resizeTextarea));
 
 type RecordingState = 'idle' | 'recording' | 'sending';
 const recordingState = ref<RecordingState>('idle');
@@ -80,6 +90,8 @@ async function handleSend(): Promise<void> {
     messages.value.push({ role: 'user', content: text });
     messageInput.value = '';
     isLoading.value = true;
+    await nextTick();
+    resizeTextarea();
     await scrollToBottom();
 
     try {
@@ -295,11 +307,13 @@ function getAudioUrl(messageId: number): string {
                     </Button>
                 </div>
 
-                <form class="flex items-center gap-2" @submit.prevent="handleSend">
-                    <Input
+                <form class="flex items-end gap-2" @submit.prevent="handleSend">
+                    <textarea
+                        ref="textareaRef"
                         v-model="messageInput"
                         placeholder="O que você comeu hoje?"
-                        class="flex-1 rounded-full bg-muted px-4"
+                        rows="1"
+                        class="placeholder:text-muted-foreground dark:bg-input/30 border-input flex-1 resize-none rounded-2xl border bg-muted px-4 py-2 text-sm leading-relaxed shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
                         :disabled="isLoading || recordingState !== 'idle'"
                         autocomplete="off"
                         @keydown="handleKeydown"
