@@ -5,14 +5,17 @@ namespace App\Http\Controllers;
 use App\Ai\Agents\NutritionistAgent;
 use App\Http\Requests\SendAudioMessageRequest;
 use App\Http\Requests\SendMessageRequest;
+use App\Models\ChatMessage;
 use App\Models\User;
 use App\Services\ChatMessageService;
 use App\Services\SummaryService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
 use Laravel\Ai\Transcription;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ChatController extends Controller
 {
@@ -26,7 +29,12 @@ class ChatController extends Controller
      */
     public function index(): Response
     {
-        return Inertia::render('Chat/Index');
+        /** @var User $user */
+        $user = auth()->user();
+
+        return Inertia::render('Chat/Index', [
+            'chatMessages' => $this->chatMessageService->getHistory($user),
+        ]);
     }
 
     public function sendMessage(SendMessageRequest $request): JsonResponse
@@ -65,6 +73,22 @@ class ChatController extends Controller
             ...$result,
             'transcription' => $transcribedText,
         ]);
+    }
+
+    public function audioFile(ChatMessage $chatMessage): StreamedResponse
+    {
+        /** @var User $user */
+        $user = auth()->user();
+
+        if ($chatMessage->user_id !== $user->id) {
+            abort(403);
+        }
+
+        if (! $chatMessage->audio_path) {
+            abort(404);
+        }
+
+        return Storage::disk('local')->response($chatMessage->audio_path);
     }
 
     /**

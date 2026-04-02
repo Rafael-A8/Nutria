@@ -1,11 +1,21 @@
 export type Profile = {
     id: number;
     user_id: number;
-    weight: number | null;
-    height: number | null;
-    daily_calorie_goal: number;
+    gender: string | null;
+    birth_date: string | null;
+    height_cm: number | null;
+    goal: string | null;
+    activity_level: string | null;
     created_at: string;
     updated_at: string;
+};
+
+export type ChatMessage = {
+    id: number;
+    role: 'user' | 'assistant';
+    content: string;
+    audio_path: string | null;
+    created_at: string;
 };
 
 export type User = {

@@ -107,3 +107,74 @@ it('sends text message and stores chat messages', function () {
         'content' => 'Olá! Como posso ajudar?',
     ]);
 });
+
+it('loads chat index with message history', function () {
+    $user = User::factory()->create();
+
+    ChatMessage::create(['user_id' => $user->id, 'role' => 'user', 'content' => 'Oi']);
+    ChatMessage::create(['user_id' => $user->id, 'role' => 'assistant', 'content' => 'Olá!']);
+
+    $response = $this->actingAs($user)
+        ->get(route('chat.index'));
+
+    $response->assertSuccessful()
+        ->assertInertia(fn ($page) => $page
+            ->component('Chat/Index')
+            ->has('chatMessages', 2)
+            ->where('chatMessages.0.content', 'Oi')
+            ->where('chatMessages.1.content', 'Olá!')
+        );
+});
+
+it('serves audio file for authenticated owner', function () {
+    Storage::fake('local');
+
+    $user = User::factory()->create();
+    Storage::disk('local')->put("audio/{$user->id}/test.webm", 'fake-audio-content');
+
+    $message = ChatMessage::create([
+        'user_id' => $user->id,
+        'role' => 'user',
+        'content' => 'Audio transcription',
+        'audio_path' => "audio/{$user->id}/test.webm",
+    ]);
+
+    $response = $this->actingAs($user)
+        ->get(route('chat.audio', $message));
+
+    $response->assertSuccessful();
+});
+
+it('denies audio file access to other users', function () {
+    Storage::fake('local');
+
+    $owner = User::factory()->create();
+    $other = User::factory()->create();
+    Storage::disk('local')->put("audio/{$owner->id}/test.webm", 'fake-audio-content');
+
+    $message = ChatMessage::create([
+        'user_id' => $owner->id,
+        'role' => 'user',
+        'content' => 'Audio transcription',
+        'audio_path' => "audio/{$owner->id}/test.webm",
+    ]);
+
+    $this->actingAs($other)
+        ->get(route('chat.audio', $message))
+        ->assertForbidden();
+});
+
+it('returns 404 for message without audio', function () {
+    $user = User::factory()->create();
+
+    $message = ChatMessage::create([
+        'user_id' => $user->id,
+        'role' => 'user',
+        'content' => 'Text only message',
+        'audio_path' => null,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('chat.audio', $message))
+        ->assertNotFound();
+});
