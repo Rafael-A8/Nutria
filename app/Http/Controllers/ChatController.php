@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Transcription;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -104,18 +105,33 @@ class ChatController extends Controller
             $this->summaryService->generateIfNeeded($user);
         }
 
+        $aiConfig = $this->resolveAiModel($user->profile?->preferred_ai_model ?? 'gemini-2.0-flash');
+
         if ($conversationId) {
             $response = $agent->continue($conversationId, as: $user)
-                ->prompt($message);
+                ->prompt($message, provider: $aiConfig['provider'], model: $aiConfig['model']);
         } else {
             $response = $agent->forUser($user)
-                ->prompt($message);
+                ->prompt($message, provider: $aiConfig['provider'], model: $aiConfig['model']);
         }
 
         return [
             'reply' => $response->text,
             'conversationId' => $response->conversationId,
         ];
+    }
+
+    /**
+     * Resolve AI provider and model from the user's preference.
+     *
+     * @return array{provider: Lab, model: string}
+     */
+    private function resolveAiModel(string $preference): array
+    {
+        return match ($preference) {
+            'gpt-4o-mini' => ['provider' => Lab::OpenAI, 'model' => 'gpt-4o-mini'],
+            default => ['provider' => Lab::Gemini, 'model' => 'gemini-2.0-flash'],
+        };
     }
 
     private function getCurrentMonthConversationId(int $userId): ?string

@@ -25,8 +25,8 @@ use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Promptable;
 use Stringable;
 
-#[Provider('openai')]
-#[Model('gpt-4o-mini')]
+#[Provider('gemini')]
+#[Model('gemini-2.0-flash')]
 #[MaxSteps(5)]
 class NutritionistAgent implements Agent, Conversational, HasTools
 {
@@ -116,22 +116,50 @@ class NutritionistAgent implements Agent, Conversational, HasTools
 
         $prompt .= <<<'PROMPT'
 
-        REGRAS DE CÁLCULO CALÓRICO:
+        CÁLCULO DA META CALÓRICA DIÁRIA (Mifflin-St Jeor — OBRIGATÓRIO):
+        Use EXATAMENTE esta fórmula. Não use outra. Mostre cada etapa ao usuário.
+
+        Passo 1 — TMB (Taxa Metabólica Basal):
+          Homem:  TMB = (10 × peso_kg) + (6.25 × altura_cm) - (5 × idade_anos) + 5
+          Mulher: TMB = (10 × peso_kg) + (6.25 × altura_cm) - (5 × idade_anos) - 161
+
+        Passo 2 — TDEE (Gasto Energético Total) = TMB × fator de atividade:
+          sedentario:   × 1.2
+          leve:         × 1.375
+          moderado:     × 1.55
+          ativo:        × 1.725
+          muito_ativo:  × 1.9
+
+        Passo 3 — Meta diária:
+          perder_peso:   TDEE - 400 kcal (déficit moderado e sustentável)
+          manter_peso:   TDEE
+          ganhar_massa:  TDEE + 300 kcal (superávit controlado)
+
+        IMPORTANTE: Sempre mostre o cálculo completo ao usuário na primeira vez:
+          "TMB = (10 × 85) + (6.25 × 175) - (5 × 35) + 5 = 850 + 1093.75 - 175 + 5 = 1773.75 kcal
+           TDEE = 1773.75 × 1.55 = 2749 kcal
+           Meta para perder peso = 2749 - 400 = ~2349 kcal/dia"
+
+        REGRAS DE CÁLCULO DE ALIMENTOS:
         - Quando o usuário informar alimentos COM peso em gramas (ex: "arroz 70g", "frango 150g"), calcule as calorias com base em tabelas nutricionais padrão (TACO/USDA). NUNCA invente valores.
         - Referências calóricas por 100g (use como base, ajuste pela gramagem informada):
-          * Arroz branco cozido: ~130 kcal/100g
+          * Arroz branco cozido: ~128 kcal/100g
           * Feijão carioca cozido: ~77 kcal/100g
           * Peito de frango grelhado: ~165 kcal/100g
-          * Coxa/sobrecoxa de frango: ~190 kcal/100g
-          * Carne bovina magra: ~170 kcal/100g
+          * Coxa/sobrecoxa de frango cozida: ~190 kcal/100g
+          * Carne bovina magra grelhada: ~170 kcal/100g
           * Ovo cozido (unidade ~50g): ~78 kcal
           * Farinha de mandioca: ~360 kcal/100g
           * Banana (unidade ~100g): ~89 kcal
           * Batata doce cozida: ~86 kcal/100g
-        - Quando o alimento for industrializado com marca (ex: "sorvete Nestlé 85g"), use valores típicos da marca/categoria.
+          * Macarrão cozido: ~130 kcal/100g
+          * Pão francês (unidade ~50g): ~150 kcal
+          * Leite integral: ~60 kcal/100ml
+          * Queijo mussarela: ~280 kcal/100g
+        - Quando o alimento for industrializado com marca (ex: "biscoito Maria 4 unidades"), use valores típicos da marca/embalagem.
         - Quando NÃO houver peso informado, estime uma porção padrão e informe qual porção assumiu.
-        - Antes de estimar, use `get_similar_items` para verificar o histórico.
-        - Sempre mostre o cálculo ao usuário: "Arroz 70g → 70g × 130kcal/100g = ~91 kcal".
+        - Antes de estimar, use `get_similar_items` para verificar o histórico — pode ter valor exato já registrado.
+        - Sempre mostre o cálculo: "Arroz 70g → 70 × 128/100 = ~90 kcal".
 
         REGRAS DE REGISTRO DE REFEIÇÕES:
         - Sempre que o usuário relatar alimentos, use `register_meal` para registrar.
@@ -141,8 +169,7 @@ class NutritionistAgent implements Agent, Conversational, HasTools
         - Se o usuário listar vários alimentos de uma vez, registre tudo numa única chamada de register_meal.
 
         REGRAS DE ACOMPANHAMENTO E CONSELHOS:
-        - Calcule a meta calórica diária com base nos dados do perfil (fórmula de Harris-Benedict ou Mifflin-St Jeor).
-        - Para perda de peso: sugira um déficit de 300-500 kcal/dia a partir do TDEE.
+        - Use a meta calculada pela fórmula acima. NÃO invente valores arredondados.
         - Sempre contextualize: "Você consumiu X de Y kcal hoje (Z%)".
         - Dê dicas práticas e positivas: substituições inteligentes, hidratação, distribuição de refeições.
         - Seja encorajador quando o progresso estiver bom e cuidadoso (sem julgamentos) quando ultrapassar metas.
