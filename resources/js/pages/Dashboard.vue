@@ -19,7 +19,7 @@ const breadcrumbs: BreadcrumbItem[] = [{ title: 'Dashboard', href: '/dashboard' 
                 <LayoutGrid class="size-8 text-primary" />
             </div>
             <div class="text-center">
-                <h1 class="text-2xl font-semibold">Bem-vindo ao Fitia</h1>
+                <h1 class="text-2xl font-semibold">Bem-vindo ao Nutria</h1>
                 <p class="mt-2 text-muted-foreground">Seu diário nutricional inteligente com IA.</p>
             </div>
             <Link :href="chatIndex()">
