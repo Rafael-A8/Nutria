@@ -70,13 +70,13 @@ it('finds similar items by description', function () {
     $this->service->addItem($meal, 'arroz branco', 150, 195);
     $this->service->addItem($meal, 'feijão preto', 100, 77);
 
-    $similar = $this->service->findSimilarItems('arroz');
+    $similar = $this->service->findSimilarItems($this->user, 'arroz');
 
     expect($similar)->toBeInstanceOf(Collection::class);
 });
 
 it('returns empty collection when no similar items exist', function () {
-    $similar = $this->service->findSimilarItems('pizza');
+    $similar = $this->service->findSimilarItems($this->user, 'pizza');
 
     expect($similar)->toBeEmpty();
 });

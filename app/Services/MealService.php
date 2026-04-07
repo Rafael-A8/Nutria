@@ -38,15 +38,36 @@ class MealService
     }
 
     /**
+     * Busca itens similares priorizando o histórico do usuário,
+     * complementando com itens globais (base nutricional compartilhada).
+     *
      * @return Collection<int, MealItem>
      */
-    public function findSimilarItems(string $description, int $limit = 5): Collection
+    public function findSimilarItems(User $user, string $description, int $limit = 5): Collection
     {
-        return MealItem::query()
+        $userItems = MealItem::query()
+            ->whereHas('meal', fn ($q) => $q->where('user_id', $user->id))
             ->whereNotNull('embedding')
             ->whereVectorSimilarTo('embedding', $description, minSimilarity: 0.4)
             ->limit($limit)
             ->get();
+
+        if ($userItems->count() >= $limit) {
+            return $userItems;
+        }
+
+        $remaining = $limit - $userItems->count();
+        $excludeIds = $userItems->pluck('id')->all();
+
+        $globalItems = MealItem::query()
+            ->whereHas('meal', fn ($q) => $q->where('user_id', '!=', $user->id))
+            ->whereNotIn('id', $excludeIds)
+            ->whereNotNull('embedding')
+            ->whereVectorSimilarTo('embedding', $description, minSimilarity: 0.4)
+            ->limit($remaining)
+            ->get();
+
+        return $userItems->concat($globalItems);
     }
 
     /**
