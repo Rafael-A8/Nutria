@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['user_id', 'gender', 'birth_date', 'height_cm', 'goal', 'activity_level'])]
+#[Fillable(['user_id', 'gender', 'birth_date', 'height_cm', 'goal', 'activity_level', 'preferred_ai_model'])]
 class Profile extends Model
 {
     use HasFactory;
