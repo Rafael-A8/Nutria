@@ -2,6 +2,7 @@
 
 namespace App\Ai\Tools;
 
+use App\Models\User;
 use App\Services\MealService;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Contracts\Tool;
@@ -10,6 +11,8 @@ use Stringable;
 
 class GetSimilarItemsTool implements Tool
 {
+    public function __construct(protected User $user) {}
+
     /**
      * Get the description of the tool's purpose.
      */
@@ -36,7 +39,7 @@ class GetSimilarItemsTool implements Tool
     public function handle(Request $request): Stringable|string
     {
         $service = new MealService;
-        $items = $service->findSimilarItems($request['description']);
+        $items = $service->findSimilarItems($this->user, $request['description']);
 
         if ($items->isEmpty()) {
             return 'Nenhum item similar encontrado no histórico.';

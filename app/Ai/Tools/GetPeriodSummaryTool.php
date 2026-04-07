@@ -41,8 +41,8 @@ class GetPeriodSummaryTool implements Tool
      */
     public function handle(Request $request): Stringable|string
     {
-        $startDate = Carbon::parse($request->get('start_date'));
-        $endDate = Carbon::parse($request->get('end_date'));
+        $startDate = Carbon::parse($request['start_date']);
+        $endDate = Carbon::parse($request['end_date']);
 
         $mealService = new MealService;
         $mealStats = $mealService->getPeriodSummary($this->user, $startDate, $endDate);
