@@ -24,6 +24,25 @@ enum AiModel: string
         };
     }
 
+    /**
+     * Returns the provider chain for automatic failover support.
+     * Providers are tried in order; next is used on RateLimit/Overload.
+     *
+     * @return array<string, string>
+     */
+    public function providerChain(): array
+    {
+        return match ($this) {
+            self::GeminiFlashLite => [
+                Lab::Gemini->value => self::GeminiFlashLite->value,
+                Lab::OpenAI->value => self::GptFourOMini->value,
+            ],
+            self::GptFourOMini => [
+                Lab::OpenAI->value => self::GptFourOMini->value,
+            ],
+        };
+    }
+
     public function label(): string
     {
         return match ($this) {

@@ -109,10 +109,10 @@ class ChatController extends Controller
 
         if ($conversationId) {
             $response = $agent->continue($conversationId, as: $user)
-                ->prompt($message, provider: $model->provider(), model: $model->value);
+                ->prompt($message, provider: $model->providerChain());
         } else {
             $response = $agent->forUser($user)
-                ->prompt($message, provider: $model->provider(), model: $model->value);
+                ->prompt($message, provider: $model->providerChain());
         }
 
         return [
