@@ -21,9 +21,9 @@ class AiModelController extends Controller
     {
         return [
             [
-                'value' => 'gemini-2.0-flash',
+                'value' => 'gemini-2.0-flash-lite',
                 'label' => 'Recomendado',
-                'description' => 'Gemini 2.0 Flash — melhor em cálculos e mais barato',
+                'description' => 'Gemini 2.0 Flash Lite — melhor em cálculos e mais barato',
                 'icon' => 'brain',
             ],
             [
@@ -44,7 +44,7 @@ class AiModelController extends Controller
         $user = $request->user();
 
         return Inertia::render('settings/AiModel', [
-            'currentModel' => $user->profile?->preferred_ai_model ?? 'gemini-2.0-flash',
+            'currentModel' => $user->profile?->preferred_ai_model ?? 'gemini-2.0-flash-lite',
             'availableModels' => static::availableModels(),
         ]);
     }

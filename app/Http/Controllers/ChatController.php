@@ -105,7 +105,7 @@ class ChatController extends Controller
             $this->summaryService->generateIfNeeded($user);
         }
 
-        $aiConfig = $this->resolveAiModel($user->profile?->preferred_ai_model ?? 'gemini-2.0-flash');
+        $aiConfig = $this->resolveAiModel($user->profile?->preferred_ai_model);
 
         if ($conversationId) {
             $response = $agent->continue($conversationId, as: $user)
@@ -130,7 +130,7 @@ class ChatController extends Controller
     {
         return match ($preference) {
             'gpt-4o-mini' => ['provider' => Lab::OpenAI, 'model' => 'gpt-4o-mini'],
-            default => ['provider' => Lab::Gemini, 'model' => 'gemini-2.0-flash'],
+            default => ['provider' => Lab::Gemini, 'model' => 'gemini-2.0-flash-lite'],
         };
     }
 

@@ -16,7 +16,7 @@ return new class extends Migration
             $table->integer('height_cm');
             $table->string('goal');
             $table->string('activity_level');
-            $table->string('preferred_ai_model', 50)->default('gemini-2.0-flash');
+            $table->string('preferred_ai_model', 50)->nullable();
             $table->timestamps();
         });
     }

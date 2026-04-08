@@ -10,6 +10,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 #[Fillable(['user_id', 'gender', 'birth_date', 'height_cm', 'goal', 'activity_level', 'preferred_ai_model'])]
 class Profile extends Model
 {
+    protected $attributes = [
+        'preferred_ai_model' => 'gemini-2.0-flash-lite',
+    ];
+
     use HasFactory;
 
     protected $table = 'user_profiles';
