@@ -14,19 +14,20 @@ docker compose -f compose.prod.yaml exec app composer install --no-dev --optimiz
 # Instala dependências Node e builda assets
 echo "[3/6] Buildando assets frontend..."
 docker compose -f compose.prod.yaml exec app npm ci
+
+# Gera rotas Wayfinder (precisa rodar ANTES do build)
+echo "[4/6] Gerando rotas Wayfinder..."
+docker compose -f compose.prod.yaml exec app php artisan wayfinder:generate --no-interaction
+
 docker compose -f compose.prod.yaml exec app npm run build
 
 # Roda migrations
-echo "[4/6] Rodando migrations..."
+echo "[5/6] Rodando migrations..."
 docker compose -f compose.prod.yaml exec app php artisan migrate --force
 
 # Otimiza caches (config, routes, views, events)
-echo "[5/6] Otimizando caches..."
+echo "[6/6] Otimizando caches..."
 docker compose -f compose.prod.yaml exec app php artisan optimize
-
-# Gera rotas Wayfinder
-echo "[6/6] Gerando rotas Wayfinder..."
-docker compose -f compose.prod.yaml exec app php artisan wayfinder:generate
 
 echo ""
 echo "=== Deploy concluído! ==="
