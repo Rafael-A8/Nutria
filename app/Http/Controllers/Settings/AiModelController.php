@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Settings;
 
+use App\Enums\AiModel;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
@@ -19,20 +20,7 @@ class AiModelController extends Controller
      */
     public static function availableModels(): array
     {
-        return [
-            [
-                'value' => 'gemini-2.0-flash-lite',
-                'label' => 'Recomendado',
-                'description' => 'Gemini 2.0 Flash Lite — melhor em cálculos e mais barato',
-                'icon' => 'brain',
-            ],
-            [
-                'value' => 'gpt-4o-mini',
-                'label' => 'Alternativo',
-                'description' => 'GPT-4o Mini — estilo de resposta diferente',
-                'icon' => 'zap',
-            ],
-        ];
+        return AiModel::options();
     }
 
     /**
@@ -44,7 +32,7 @@ class AiModelController extends Controller
         $user = $request->user();
 
         return Inertia::render('settings/AiModel', [
-            'currentModel' => $user->profile?->preferred_ai_model ?? 'gemini-2.0-flash-lite',
+            'currentModel' => $user->profile?->preferred_ai_model ?? AiModel::default()->value,
             'availableModels' => static::availableModels(),
         ]);
     }
@@ -55,7 +43,7 @@ class AiModelController extends Controller
     public function update(Request $request): RedirectResponse
     {
         $validated = $request->validate([
-            'preferred_ai_model' => ['required', 'string', Rule::in(array_column(static::availableModels(), 'value'))],
+            'preferred_ai_model' => ['required', 'string', Rule::in(array_column(AiModel::options(), 'value'))],
         ]);
 
         /** @var User $user */

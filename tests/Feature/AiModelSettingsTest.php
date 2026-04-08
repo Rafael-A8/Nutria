@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\AiModel;
 use App\Models\Profile;
 use App\Models\User;
 
@@ -24,7 +25,7 @@ test('it returns default model when user has no profile', function () {
     $response->assertOk();
     $response->assertInertia(fn ($page) => $page
         ->component('settings/AiModel')
-        ->where('currentModel', 'gemini-2.0-flash-lite')
+        ->where('currentModel', AiModel::default()->value)
     );
 });
 
@@ -41,11 +42,11 @@ test('it updates the preferred ai model to gemini', function () {
 
     $this->actingAs($user)
         ->patch(route('ai-model.update'), [
-            'preferred_ai_model' => 'gemini-2.0-flash-lite',
+            'preferred_ai_model' => AiModel::GeminiFlashLite->value,
         ])
         ->assertRedirect(route('ai-model.edit'));
 
-    expect($user->profile->fresh()->preferred_ai_model)->toBe('gemini-2.0-flash-lite');
+    expect($user->profile->fresh()->preferred_ai_model)->toBe(AiModel::GeminiFlashLite->value);
 });
 
 test('it creates profile when updating model if no profile exists', function () {
@@ -53,14 +54,14 @@ test('it creates profile when updating model if no profile exists', function () 
 
     $this->actingAs($user)
         ->patch(route('ai-model.update'), [
-            'preferred_ai_model' => 'gemini-2.0-flash-lite',
+            'preferred_ai_model' => AiModel::GeminiFlashLite->value,
         ])
         ->assertRedirect(route('ai-model.edit'));
 
     $user->refresh();
 
     expect($user->profile)->not->toBeNull();
-    expect($user->profile->preferred_ai_model)->toBe('gemini-2.0-flash-lite');
+    expect($user->profile->preferred_ai_model)->toBe(AiModel::default()->value);
 });
 
 test('it rejects invalid model values', function () {

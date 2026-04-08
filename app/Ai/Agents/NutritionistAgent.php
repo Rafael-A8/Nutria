@@ -26,7 +26,7 @@ use Laravel\Ai\Promptable;
 use Stringable;
 
 #[Provider('gemini')]
-#[Model('gemini-2.0-flash-lite')]
+#[Model(\App\Enums\AiModel::GeminiFlashLite->value)]
 #[MaxSteps(5)]
 class NutritionistAgent implements Agent, Conversational, HasTools
 {

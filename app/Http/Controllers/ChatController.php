@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Ai\Agents\NutritionistAgent;
+use App\Enums\AiModel;
 use App\Http\Requests\SendAudioMessageRequest;
 use App\Http\Requests\SendMessageRequest;
 use App\Models\ChatMessage;
@@ -14,7 +15,6 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
-use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Transcription;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -105,33 +105,20 @@ class ChatController extends Controller
             $this->summaryService->generateIfNeeded($user);
         }
 
-        $aiConfig = $this->resolveAiModel($user->profile?->preferred_ai_model);
+        $model = AiModel::tryFrom($user->profile?->preferred_ai_model ?? '') ?? AiModel::default();
 
         if ($conversationId) {
             $response = $agent->continue($conversationId, as: $user)
-                ->prompt($message, provider: $aiConfig['provider'], model: $aiConfig['model']);
+                ->prompt($message, provider: $model->provider(), model: $model->value);
         } else {
             $response = $agent->forUser($user)
-                ->prompt($message, provider: $aiConfig['provider'], model: $aiConfig['model']);
+                ->prompt($message, provider: $model->provider(), model: $model->value);
         }
 
         return [
             'reply' => $response->text,
             'conversationId' => $response->conversationId,
         ];
-    }
-
-    /**
-     * Resolve AI provider and model from the user's preference.
-     *
-     * @return array{provider: Lab, model: string}
-     */
-    private function resolveAiModel(string $preference): array
-    {
-        return match ($preference) {
-            'gpt-4o-mini' => ['provider' => Lab::OpenAI, 'model' => 'gpt-4o-mini'],
-            default => ['provider' => Lab::Gemini, 'model' => 'gemini-2.0-flash-lite'],
-        };
     }
 
     private function getCurrentMonthConversationId(int $userId): ?string
