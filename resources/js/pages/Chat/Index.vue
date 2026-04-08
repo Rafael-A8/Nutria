@@ -5,6 +5,7 @@ import { Mic, SendHorizontal, Square, Utensils } from 'lucide-vue-next';
 import { sendAudioMessage, sendMessage } from '@/actions/App/Http/Controllers/ChatController';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Button } from '@/components/ui/button';
+import MarkdownMessage from '@/components/MarkdownMessage.vue';
 import type { BreadcrumbItem, ChatMessage, User } from '@/types';
 
 interface DisplayMessage {
@@ -260,7 +261,8 @@ function getAudioUrl(messageId: number): string {
                                 : 'rounded-bl-sm bg-muted text-foreground'
                         "
                     >
-                        <p class="whitespace-pre-wrap">{{ message.content }}</p>
+                        <MarkdownMessage v-if="message.role === 'assistant'" :content="message.content" />
+                        <p v-else class="whitespace-pre-wrap">{{ message.content }}</p>
 
                         <!-- Audio player para mensagens de voz -->
                         <audio

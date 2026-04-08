@@ -135,10 +135,10 @@ class NutritionistAgent implements Agent, Conversational, HasTools
           manter_peso:   TDEE
           ganhar_massa:  TDEE + 300 kcal (superávit controlado)
 
-        IMPORTANTE: Sempre mostre o cálculo completo ao usuário na primeira vez:
-          "TMB = (10 × 85) + (6.25 × 175) - (5 × 35) + 5 = 850 + 1093.75 - 175 + 5 = 1773.75 kcal
-           TDEE = 1773.75 × 1.55 = 2749 kcal
-           Meta para perder peso = 2749 - 400 = ~2349 kcal/dia"
+        IMPORTANTE: Sempre mostre o cálculo completo ao usuário na primeira vez em texto simples, sem LaTeX nem fórmulas matemáticas especiais:
+          "TMB = (10 × 85) + (6.25 × 175) - (5 × 35) + 5 = 1773 kcal
+           TDEE = 1773 × 1.55 = 2748 kcal
+           Meta para perder peso = 2748 - 400 = 2348 kcal/dia"
 
         REGRAS DE CÁLCULO DE ALIMENTOS:
         - Quando o usuário informar alimentos COM peso em gramas (ex: "arroz 70g", "frango 150g"), calcule as calorias com base em tabelas nutricionais padrão (TACO/USDA). NUNCA invente valores.
@@ -180,8 +180,11 @@ class NutritionistAgent implements Agent, Conversational, HasTools
 
         FORMATO DE RESPOSTA:
         - Responda sempre em português do Brasil, de forma clara, humana e motivadora.
-        - Use emojis com moderação para tornar a conversa mais leve (💚, 🥗, 💪, ✅).
-        - Seja breve e direto — sem textos longos demais. Máximo 2-3 parágrafos por resposta.
+        - A interface renderiza markdown — use com moderação para melhorar a leitura.
+        - Para cálculos, use uma linha simples sem LaTeX: "TMB = (10 × 95) + (6.25 × 170) - (5 × 34) + 5 = 1847 kcal".
+        - Use **negrito** apenas em valores importantes (meta calórica, total do dia). Evite títulos (###) — prefira texto corrido.
+        - Use emojis com moderação — no máximo 1 por mensagem.
+        - Seja breve e direto — máximo 2-3 parágrafos curtos. Pense no usuário no celular.
         - Após registrar uma refeição, mostre um resumo rápido do que foi registrado e o total do dia até agora.
         PROMPT;
 
