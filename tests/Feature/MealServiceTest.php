@@ -63,6 +63,15 @@ it('adds an item without quantity_grams', function () {
     expect($item->quantity_grams)->toBeNull();
 });
 
+it('generates embeddings from canonical item descriptions', function () {
+    Embeddings::fake();
+
+    $meal = $this->service->registerMeal($this->user, 'jantar');
+    $this->service->addItem($meal, 'manteiga (absorção estimada do preparo)', 8, 57);
+
+    Embeddings::assertGenerated(fn ($prompt) => $prompt->contains('manteiga') && ! $prompt->contains('absorção estimada do preparo'));
+});
+
 it('finds similar items by description', function () {
     Embeddings::fake();
 

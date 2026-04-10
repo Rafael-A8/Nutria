@@ -18,7 +18,7 @@ class RegisterMealTool implements Tool
      */
     public function description(): Stringable|string
     {
-        return 'Registra uma refeição com seus itens. Use sempre que o usuário relatar que comeu algo. Separe cada alimento como um item individual com suas calorias estimadas.';
+        return 'Registra uma refeição com seus itens. Use depois de estimate_meal e envie exatamente os items_for_registration retornados pela estimativa. Separe cada alimento consumido como um item individual com suas calorias efetivamente ingeridas. Ingredientes usados só no preparo devem considerar apenas a fração absorvida/consumida, não o total usado.';
     }
 
     /**
@@ -32,9 +32,9 @@ class RegisterMealTool implements Tool
             'meal_type' => $schema->string()->description('Tipo da refeição: cafe_da_manha, almoco, lanche, jantar, sobremesa, outro.')->required(),
             'items' => $schema->array()->items(
                 $schema->object([
-                    'description' => $schema->string()->description('Descrição do item consumido (ex: coxinha, arroz, feijão).')->required(),
+                    'description' => $schema->string()->description('Descrição do item consumido (ex: coxinha, arroz, feijão). Se houver estimativa por absorção no preparo, deixe isso claro na descrição.')->required(),
                     'quantity_grams' => $schema->integer()->description('Peso em gramas, se informado pelo usuário. Null caso contrário.'),
-                    'calories' => $schema->integer()->description('Calorias estimadas do item.')->required(),
+                    'calories' => $schema->integer()->description('Calorias efetivamente consumidas do item. Para óleo, manteiga e outros ingredientes usados só no preparo, informe apenas a fração absorvida/ingerida.')->required(),
                 ])
             )->min(1)->description('Lista de itens consumidos na refeição.')->required(),
         ];

@@ -7,6 +7,7 @@ use App\Models\MealItem;
 use App\Models\User;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 use Laravel\Ai\Embeddings;
 
 class MealService
@@ -27,7 +28,7 @@ class MealService
             'calories' => $calories,
         ]);
 
-        $response = Embeddings::for([$description])
+        $response = Embeddings::for([$this->embeddingText($description)])
             ->dimensions(1536)
             ->generate();
 
@@ -45,10 +46,12 @@ class MealService
      */
     public function findSimilarItems(User $user, string $description, int $limit = 5): Collection
     {
+        $embeddingQuery = $this->embeddingText($description);
+
         $userItems = MealItem::query()
             ->whereHas('meal', fn ($q) => $q->where('user_id', $user->id))
             ->whereNotNull('embedding')
-            ->whereVectorSimilarTo('embedding', $description, minSimilarity: 0.4)
+            ->whereVectorSimilarTo('embedding', $embeddingQuery, minSimilarity: 0.4)
             ->limit($limit)
             ->get();
 
@@ -63,7 +66,7 @@ class MealService
             ->whereHas('meal', fn ($q) => $q->where('user_id', '!=', $user->id))
             ->whereNotIn('id', $excludeIds)
             ->whereNotNull('embedding')
-            ->whereVectorSimilarTo('embedding', $description, minSimilarity: 0.4)
+            ->whereVectorSimilarTo('embedding', $embeddingQuery, minSimilarity: 0.4)
             ->limit($remaining)
             ->get();
 
@@ -142,5 +145,13 @@ class MealService
             'days_tracked' => $daysTracked,
             'top_items' => $topItems,
         ];
+    }
+
+    private function embeddingText(string $description): string
+    {
+        return Str::of($description)
+            ->replaceMatches('/\s*\([^)]*\)/', '')
+            ->squish()
+            ->toString();
     }
 }
