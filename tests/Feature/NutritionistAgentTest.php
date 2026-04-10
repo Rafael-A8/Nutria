@@ -37,7 +37,9 @@ it('delegates preparation ingredient handling to the estimation flow', function 
 
     $instructions = (string) (new NutritionistAgent($user))->instructions();
 
-    expect($instructions)->toContain('`estimate_meal` é a fonte de verdade para calorias')
+    expect($instructions)->toContain('`parse_meal_message` ANTES de `estimate_meal`')
+        ->and($instructions)->toContain('peso total do conjunto sem divisão por item')
+        ->and($instructions)->toContain('`estimate_meal` é a fonte de verdade para calorias')
         ->and($instructions)->toContain('Use `context` em `estimate_meal` quando houver preparo ou consumo indireto')
         ->and($instructions)->toContain('A base nutricional do `estimate_meal` fica na configuração da aplicação')
         ->and($instructions)->not->toContain('Arroz branco cozido: ~128 kcal/100g');
@@ -66,7 +68,8 @@ it('instructs the agent to estimate meals before registering them', function () 
 
     $instructions = (string) (new NutritionistAgent($user))->instructions();
 
-    expect($instructions)->toContain('use `estimate_meal` ANTES de `register_meal`')
+    expect($instructions)->toContain('use `parse_meal_message` ANTES de `estimate_meal`')
+        ->and($instructions)->toContain('use exatamente `meal_type` e `items` na chamada de `estimate_meal`')
         ->and($instructions)->toContain('status = clarification_required')
         ->and($instructions)->toContain('use exatamente `items_for_registration`')
         ->and($instructions)->toContain('`user_facing_summary` como espinha da explicação ao usuário')

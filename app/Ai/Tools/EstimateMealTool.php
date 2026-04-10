@@ -23,7 +23,7 @@ class EstimateMealTool implements Tool
      */
     public function description(): Stringable|string
     {
-        return 'Estima refeições de forma determinística antes do registro. Use SEMPRE antes de register_meal quando o usuário relatar alimentos. Se retornar status clarification_required, faça a pergunta sugerida e não registre ainda. Se retornar status estimated, use exatamente os items_for_registration na chamada de register_meal e aproveite user_facing_summary, calculation_lines e assistant_response_guide para montar a resposta final.';
+        return 'Estima refeições de forma determinística antes do registro. Use depois de parse_meal_message quando o usuário relatar alimentos em texto livre. Se retornar status clarification_required, faça a pergunta sugerida e não registre ainda. Se retornar status estimated, use exatamente os items_for_registration na chamada de register_meal e aproveite user_facing_summary, calculation_lines e assistant_response_guide para montar a resposta final.';
     }
 
     /**

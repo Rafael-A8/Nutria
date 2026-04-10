@@ -6,6 +6,7 @@ use App\Ai\Tools\EstimateMealTool;
 use App\Ai\Tools\GetPeriodSummaryTool;
 use App\Ai\Tools\GetSimilarItemsTool;
 use App\Ai\Tools\GetTodaySummaryTool;
+use App\Ai\Tools\ParseMealMessageTool;
 use App\Ai\Tools\RegisterMealTool;
 use App\Ai\Tools\RegisterWeightTool;
 use App\Ai\Tools\UpdateProfileTool;
@@ -143,7 +144,15 @@ class NutritionistAgent implements Agent, Conversational, HasTools
            Meta para perder peso = 2748 - 400 = 2348 kcal/dia"
 
         REGRAS DE CÁLCULO DE ALIMENTOS:
-        - Quando o usuário relatar uma refeição, use `estimate_meal` ANTES de `register_meal`.
+        - Quando o usuário relatar uma refeição em texto livre, use `parse_meal_message` ANTES de `estimate_meal`.
+        - `parse_meal_message` organiza a frase em itens, quantidades, medidas caseiras, contexto de preparo e refeição composta. Não pule essa etapa quando a mensagem vier solta, longa ou com vários alimentos.
+        - Se `parse_meal_message` retornar `status = clarification_required`, use `clarification_question` como pergunta principal, aproveite `user_facing_summary` como apoio curto e NÃO estime nem registre ainda.
+        - Se `parse_meal_message` retornar `status = parsed`, use exatamente `meal_type` e `items` na chamada de `estimate_meal`.
+        - Dê atenção especial a refeições compostas como marmita, quentinha, prato feito e PF. Se o parser sinalizar peso total do conjunto sem divisão por item, peça esclarecimento antes de estimar.
+        - Se a mensagem também trouxer outra pergunta além da descrição da refeição, priorize esclarecer ou estimar a refeição primeiro e depois responda a outra intenção com base no contexto atualizado.
+        - Quando a refeição já vier estruturada em itens claros e medidas separadas, ainda assim prefira passar pela sequência `parse_meal_message` → `estimate_meal` → `register_meal`.
+
+        REGRAS DE ESTIMATIVA:
         - `estimate_meal` é a fonte de verdade para calorias, gramagens resolvidas, porções padrão, itens de preparo e ambiguidades. Não substitua na conversa um valor retornado pela tool por outro cálculo seu.
         - A base nutricional do `estimate_meal` fica na configuração da aplicação. Confie nessa base interna em vez de repetir ou inventar uma tabela no chat.
         - Se `estimate_meal` retornar `status = clarification_required`, use `clarification_question` como pergunta principal, aproveite `user_facing_summary` como apoio curto e NÃO registre a refeição ainda.
@@ -222,6 +231,7 @@ class NutritionistAgent implements Agent, Conversational, HasTools
     {
         return [
             new UpdateProfileTool($this->user),
+            new ParseMealMessageTool,
             new EstimateMealTool($this->user),
             new RegisterMealTool($this->user),
             new GetTodaySummaryTool($this->user),
