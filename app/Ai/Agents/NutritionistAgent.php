@@ -98,16 +98,6 @@ class NutritionistAgent implements Agent, Conversational, HasTools
 
         PROMPT;
 
-        $customInstructions = trim($profile?->custom_instructions ?? '');
-        if ($customInstructions !== '') {
-            $prompt .= <<<PROMPT
-
-            INSTRUÇÕES PERSONALIZADAS DO USUÁRIO (respeite sempre):
-            {$customInstructions}
-
-            PROMPT;
-        }
-
         if (! $profileComplete || $weightText === 'não informado') {
             $missing = [];
             if (! $profile?->gender) {
@@ -233,6 +223,16 @@ class NutritionistAgent implements Agent, Conversational, HasTools
             })->implode("\n\n");
 
             $prompt .= "\n\nResumo dos meses anteriores (use para contexto, não repita ao usuário a menos que pergunte):\n{$summaryContext}";
+        }
+
+        $customInstructions = trim($profile?->custom_instructions ?? '');
+        if ($customInstructions !== '') {
+            $prompt .= <<<PROMPT
+
+            INSTRUÇÕES PERSONALIZADAS DO USUÁRIO (têm prioridade máxima sobre qualquer regra anterior):
+            {$customInstructions}
+            Se o usuário pediu para ser chamado por um apelido, use SOMENTE o apelido — nunca o nome real.
+            PROMPT;
         }
 
         return $prompt;

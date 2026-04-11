@@ -123,7 +123,7 @@ test('agent instructions include custom instructions when set', function () {
     $instructions = (string) (new NutritionistAgent($user))->instructions();
 
     expect($instructions)
-        ->toContain('INSTRUÇÕES PERSONALIZADAS DO USUÁRIO (respeite sempre):')
+        ->toContain('INSTRUÇÕES PERSONALIZADAS DO USUÁRIO (têm prioridade máxima sobre qualquer regra anterior):')
         ->toContain('Sou vegetariano. Me chame de Rafa.');
 });
 
