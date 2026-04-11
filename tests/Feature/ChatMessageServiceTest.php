@@ -76,3 +76,30 @@ it('does not include other users messages', function () {
     expect($history)->toHaveCount(1);
     expect($history->first()->content)->toBe('minha mensagem');
 });
+
+it('stores a user message with image paths', function () {
+    $imagePaths = ['images/1/photo1.jpg', 'images/1/photo2.png'];
+    $message = $this->service->storeUserMessage($this->user, 'Almocei isso', imagePaths: $imagePaths);
+
+    expect($message)
+        ->role->toBe('user')
+        ->content->toBe('Almocei isso')
+        ->image_paths->toBe($imagePaths);
+
+    $this->assertDatabaseHas('chat_messages', [
+        'id' => $message->id,
+        'content' => 'Almocei isso',
+    ]);
+
+    $fresh = $message->fresh();
+    expect($fresh->image_paths)->toBe($imagePaths);
+});
+
+it('stores a user message with images and no text', function () {
+    $imagePaths = ['images/1/photo1.jpg'];
+    $message = $this->service->storeUserMessage($this->user, 'Enviou 1 imagem', imagePaths: $imagePaths);
+
+    expect($message)
+        ->image_paths->toHaveCount(1)
+        ->audio_path->toBeNull();
+});

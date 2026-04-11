@@ -24,6 +24,7 @@ class MealEstimationService
      *     next_step: 'register_meal'|'ask_for_clarification',
      *     items_for_registration: list<array{description: string, quantity_grams: int|null, calories: int}>,
      *     estimated_items: list<array{original_description: string, description: string, quantity_grams: int|null, calories: int, source: string, assumptions: list<string>, calculation_line: string}>,
+     *     low_confidence_items: list<array{description: string, quantity_grams: int|null, quantity_text: string|null}>,
      *     total_calories: int|null,
      *     assumptions: list<string>,
      *     calculation_lines: list<string>,
@@ -37,6 +38,7 @@ class MealEstimationService
     {
         $itemsForRegistration = [];
         $estimatedItems = [];
+        $lowConfidenceItems = [];
         $allAssumptions = [];
         $calculationLines = [];
         $totalCalories = 0;
@@ -51,6 +53,7 @@ class MealEstimationService
                     'next_step' => 'ask_for_clarification',
                     'items_for_registration' => $itemsForRegistration,
                     'estimated_items' => $estimatedItems,
+                    'low_confidence_items' => $lowConfidenceItems,
                     'total_calories' => null,
                     'assumptions' => array_values(array_unique($allAssumptions)),
                     'calculation_lines' => $calculationLines,
@@ -59,6 +62,16 @@ class MealEstimationService
                     'clarification_question' => $estimate['clarification_question'],
                     'clarification_reason' => $estimate['clarification_reason'],
                 ];
+            }
+
+            if ($estimate['status'] === 'low_confidence') {
+                $lowConfidenceItems[] = [
+                    'description' => $estimate['original_description'],
+                    'quantity_grams' => $estimate['quantity_grams'] ?? null,
+                    'quantity_text' => $estimate['quantity_text'] ?? null,
+                ];
+
+                continue;
             }
 
             $itemsForRegistration[] = [
@@ -84,17 +97,26 @@ class MealEstimationService
 
         $assumptions = array_values(array_unique($allAssumptions));
 
+        $summary = $this->buildEstimatedSummary($mealType, $estimatedItems, $totalCalories, $assumptions);
+        $guide = $this->estimatedAssistantGuide();
+
+        if ($lowConfidenceItems !== []) {
+            $summary .= ' '.$this->buildLowConfidenceSummary($lowConfidenceItems);
+            $guide = $this->lowConfidenceAssistantGuide($guide);
+        }
+
         return [
             'status' => 'estimated',
             'meal_type' => $mealType,
             'next_step' => 'register_meal',
             'items_for_registration' => $itemsForRegistration,
             'estimated_items' => $estimatedItems,
+            'low_confidence_items' => $lowConfidenceItems,
             'total_calories' => $totalCalories,
             'assumptions' => $assumptions,
             'calculation_lines' => $calculationLines,
-            'user_facing_summary' => $this->buildEstimatedSummary($mealType, $estimatedItems, $totalCalories, $assumptions),
-            'assistant_response_guide' => $this->estimatedAssistantGuide(),
+            'user_facing_summary' => $summary,
+            'assistant_response_guide' => $guide,
             'clarification_question' => null,
             'clarification_reason' => null,
         ];
@@ -103,7 +125,7 @@ class MealEstimationService
     /**
      * @param  array{description: string, quantity_grams?: int|null, quantity_text?: string|null, context?: string|null}  $item
      * @return array{
-     *     status: 'estimated'|'clarification_required',
+     *     status: 'estimated'|'clarification_required'|'low_confidence',
      *     original_description: string,
      *     description?: string,
      *     quantity_grams?: int|null,
@@ -112,7 +134,8 @@ class MealEstimationService
      *     assumptions?: list<string>,
      *     calculation_line?: string,
      *     clarification_question?: string,
-     *     clarification_reason?: string
+     *     clarification_reason?: string,
+     *     quantity_text?: string|null
      * }
      */
     private function estimateItem(User $user, array $item): array
@@ -162,10 +185,10 @@ class MealEstimationService
         }
 
         return [
-            'status' => 'clarification_required',
+            'status' => 'low_confidence',
             'original_description' => $originalDescription,
-            'clarification_question' => "Você consegue detalhar melhor {$originalDescription} para eu estimar com segurança?",
-            'clarification_reason' => 'Item sem base interna para estimativa.',
+            'quantity_grams' => $resolvedQuantityGrams,
+            'quantity_text' => $quantityText,
         ];
     }
 
@@ -392,6 +415,23 @@ class MealEstimationService
     private function clarificationAssistantGuide(): string
     {
         return 'Faça a clarification_question abaixo como sua próxima mensagem principal, explique o motivo em uma frase se ajudar e não chame register_meal até o usuário responder.';
+    }
+
+    /**
+     * @param  list<array{description: string, quantity_grams: int|null, quantity_text: string|null}>  $lowConfidenceItems
+     */
+    private function buildLowConfidenceSummary(array $lowConfidenceItems): string
+    {
+        $itemNames = collect($lowConfidenceItems)->pluck('description')->implode(', ');
+
+        return "Itens fora da base interna (estimativa do agente necessária): {$itemNames}.";
+    }
+
+    private function lowConfidenceAssistantGuide(string $baseGuide): string
+    {
+        return $baseGuide
+            .' Os itens em low_confidence_items não têm base determinística. Estime calorias e gramagem usando seu conhecimento nutricional, '
+            .'adicione-os a items_for_registration na chamada de register_meal e avise o usuário que esses itens são estimativas aproximadas (⚠ baixa confiança).';
     }
 
     private function preparationRetentionFactor(): float

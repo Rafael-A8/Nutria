@@ -11,12 +11,14 @@ use App\Ai\Tools\RegisterMealTool;
 use App\Ai\Tools\RegisterWeightTool;
 use App\Ai\Tools\UpdateProfileTool;
 use App\Enums\AiModel;
+use App\Models\Summary;
 use App\Models\User;
 use App\Services\ChatMessageService;
 use App\Services\MealService;
 use App\Services\SummaryService;
 use App\Services\WeightLogService;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Laravel\Ai\Attributes\MaxSteps;
 use Laravel\Ai\Attributes\Model;
 use Laravel\Ai\Attributes\Provider;
@@ -30,10 +32,25 @@ use Stringable;
 
 #[Provider('gemini')]
 #[Model(AiModel::GeminiFlashLite->value)]
-#[MaxSteps(5)]
+#[MaxSteps(8)]
 class NutritionistAgent implements Agent, Conversational, HasTools
 {
     use Promptable, RemembersConversations;
+
+    protected function maxConversationMessages(): int
+    {
+        return 30;
+    }
+
+    /** @var array{total_calories: int, meal_count: int, meals: array<int, array{meal_type: string, calories: int}>}|null */
+    private ?array $cachedTodaySummary = null;
+
+    private ?float $cachedLatestWeight = null;
+
+    private bool $weightResolved = false;
+
+    /** @var Collection<int, Summary>|null */
+    private ?Collection $cachedRecentSummaries = null;
 
     public function __construct(protected User $user) {}
 
@@ -57,12 +74,10 @@ class NutritionistAgent implements Agent, Conversational, HasTools
             && $profile->goal
             && $profile->activity_level;
 
-        $weightLogService = new WeightLogService;
-        $latestWeight = $weightLogService->getLatestWeight($this->user);
+        $latestWeight = $this->getLatestWeight();
         $weightText = $latestWeight ? "{$latestWeight} kg" : 'não informado';
 
-        $mealService = new MealService;
-        $todaySummary = $mealService->getTodaySummary($this->user);
+        $todaySummary = $this->getTodaySummary();
         $todayCalories = $todaySummary['total_calories'];
         $todayMealCount = $todaySummary['meal_count'];
 
@@ -157,6 +172,7 @@ class NutritionistAgent implements Agent, Conversational, HasTools
         - A base nutricional do `estimate_meal` fica na configuração da aplicação. Confie nessa base interna em vez de repetir ou inventar uma tabela no chat.
         - Se `estimate_meal` retornar `status = clarification_required`, use `clarification_question` como pergunta principal, aproveite `user_facing_summary` como apoio curto e NÃO registre a refeição ainda.
         - Se `estimate_meal` retornar `status = estimated`, use exatamente `items_for_registration` na chamada de `register_meal`.
+        - Se `estimate_meal` retornar `low_confidence_items`, esses itens não têm base determinística. Use seu conhecimento nutricional para estimar calorias e gramagem, adicione-os junto com `items_for_registration` na chamada de `register_meal` e avise o usuário que são estimativas aproximadas (⚠ baixa confiança). Prefira porções padrão conservadoras.
         - Preserve medidas caseiras quando o usuário não deu gramas. Exemplo: em `estimate_meal`, envie `quantity_text` como "2 colheres de sopa" ou "1 unidade".
         - Use `context` em `estimate_meal` quando houver preparo ou consumo indireto. Exemplo: "usada no preparo do frango", "servida por cima", "virou molho no prato".
         - Quando houver estimativa pronta, use `user_facing_summary` como espinha da explicação ao usuário, `calculation_lines` para mostrar contas com clareza, `assumptions` para transparência e `assistant_response_guide` para orientar seu próximo passo.
@@ -197,12 +213,7 @@ class NutritionistAgent implements Agent, Conversational, HasTools
         - Após registrar uma refeição, mostre um resumo rápido do que foi registrado e o total do dia até agora.
         PROMPT;
 
-        $summaryService = new SummaryService(
-            new MealService,
-            new WeightLogService,
-            new ChatMessageService,
-        );
-        $recentSummaries = $summaryService->getRecentSummaries($this->user);
+        $recentSummaries = $this->getRecentSummaries();
 
         if ($recentSummaries->isNotEmpty()) {
             $summaryContext = $recentSummaries->map(function ($summary) {
@@ -215,6 +226,36 @@ class NutritionistAgent implements Agent, Conversational, HasTools
         }
 
         return $prompt;
+    }
+
+    /**
+     * @return array{total_calories: int, meal_count: int, meals: array<int, array{meal_type: string, calories: int}>}
+     */
+    private function getTodaySummary(): array
+    {
+        return $this->cachedTodaySummary ??= (new MealService)->getTodaySummary($this->user);
+    }
+
+    private function getLatestWeight(): ?float
+    {
+        if (! $this->weightResolved) {
+            $this->cachedLatestWeight = (new WeightLogService)->getLatestWeight($this->user);
+            $this->weightResolved = true;
+        }
+
+        return $this->cachedLatestWeight;
+    }
+
+    /**
+     * @return Collection<int, Summary>
+     */
+    private function getRecentSummaries(): Collection
+    {
+        return $this->cachedRecentSummaries ??= (new SummaryService(
+            new MealService,
+            new WeightLogService,
+            new ChatMessageService,
+        ))->getRecentSummaries($this->user);
     }
 
     private function today(): string

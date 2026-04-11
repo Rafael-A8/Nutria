@@ -53,7 +53,7 @@ class MealAmbiguityService
     ];
 
     /**
-     * @return array{requires_clarification: bool, clarification_question: string|null, reason: string|null, treat_as_preparation_only: bool}
+     * @return array{requires_clarification: bool, clarification_question: string|null, reason: string|null, treat_as_preparation_only: bool, is_low_confidence: bool}
      */
     public function assess(
         string $description,
@@ -75,6 +75,7 @@ class MealAmbiguityService
                 'clarification_question' => "Quanto de {$description} foi usado no preparo? Se lembrar, me diga em colheres ou gramas.",
                 'reason' => 'Ingrediente gorduroso usado no preparo sem quantidade definida.',
                 'treat_as_preparation_only' => true,
+                'is_low_confidence' => false,
             ];
         }
 
@@ -84,6 +85,7 @@ class MealAmbiguityService
                 'clarification_question' => "Esse {$description} ficou só no preparo ou você consumiu ele como molho/caldo no prato?",
                 'reason' => 'Ingrediente de preparo com impacto calórico relevante.',
                 'treat_as_preparation_only' => true,
+                'is_low_confidence' => false,
             ];
         }
 
@@ -93,15 +95,17 @@ class MealAmbiguityService
                 'clarification_question' => "Qual foi aproximadamente a porção de {$description}? Se for industrializado, me diga também a marca.",
                 'reason' => 'Porção vaga sem referência determinística.',
                 'treat_as_preparation_only' => false,
+                'is_low_confidence' => false,
             ];
         }
 
         if (! $hasReference && ! $hasHistory) {
             return [
-                'requires_clarification' => true,
-                'clarification_question' => "Você consegue me descrever melhor {$description} ou informar a porção/marca para eu estimar com mais segurança?",
-                'reason' => 'Item sem referência interna nem histórico semelhante.',
+                'requires_clarification' => false,
+                'clarification_question' => null,
+                'reason' => null,
                 'treat_as_preparation_only' => false,
+                'is_low_confidence' => true,
             ];
         }
 
@@ -110,6 +114,7 @@ class MealAmbiguityService
             'clarification_question' => null,
             'reason' => null,
             'treat_as_preparation_only' => $looksLikePreparation,
+            'is_low_confidence' => false,
         ];
     }
 
