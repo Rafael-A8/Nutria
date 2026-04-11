@@ -15,6 +15,7 @@ export type ChatMessage = {
     role: 'user' | 'assistant';
     content: string;
     audio_path: string | null;
+    image_paths: string[] | null;
     created_at: string;
 };
 

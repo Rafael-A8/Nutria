@@ -8,12 +8,16 @@ use Illuminate\Support\Collection;
 
 class ChatMessageService
 {
-    public function storeUserMessage(User $user, string $content, ?string $audioPath = null): ChatMessage
+    /**
+     * @param  list<string>|null  $imagePaths
+     */
+    public function storeUserMessage(User $user, string $content, ?string $audioPath = null, ?array $imagePaths = null): ChatMessage
     {
         return $user->chatMessages()->create([
             'role' => 'user',
             'content' => $content,
             'audio_path' => $audioPath,
+            'image_paths' => $imagePaths,
         ]);
     }
 

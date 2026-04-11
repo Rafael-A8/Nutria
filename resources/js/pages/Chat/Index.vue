@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { nextTick, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { Head, usePage } from '@inertiajs/vue3';
 import { ChevronDown, ImagePlus, Mic, SendHorizontal, Square, Utensils } from 'lucide-vue-next';
-import { sendAudioMessage, sendMessage } from '@/actions/App/Http/Controllers/ChatController';
+import { sendAudioMessage, sendImageMessage, sendMessage } from '@/actions/App/Http/Controllers/ChatController';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Button } from '@/components/ui/button';
 import MarkdownMessage from '@/components/MarkdownMessage.vue';
@@ -13,6 +13,7 @@ interface DisplayMessage {
     role: 'user' | 'assistant';
     content: string;
     audioPath?: string | null;
+    imagePaths?: string[] | null;
 }
 
 const props = defineProps<{
@@ -32,6 +33,7 @@ if (props.chatMessages.length > 0) {
         role: m.role,
         content: m.content,
         audioPath: m.audio_path,
+        imagePaths: m.image_paths,
     }));
 } else {
     messages.value = [
@@ -127,29 +129,68 @@ onMounted(() => void scrollToBottom());
 
 async function handleSend(): Promise<void> {
     const text = messageInput.value.trim();
-    if (!text || isLoading.value) return;
+    const images = [...selectedImages.value];
+    const hasImages = images.length > 0;
 
-    messages.value.push({ role: 'user', content: text });
+    if ((!text && !hasImages) || isLoading.value) return;
+
+    const previews = images.map((img) => img.preview);
+    messages.value.push({
+        role: 'user',
+        content: text || `Enviou ${images.length} ${images.length === 1 ? 'imagem' : 'imagens'}`,
+        imagePaths: hasImages ? previews : null,
+    });
+
     messageInput.value = '';
+    selectedImages.value = [];
     isLoading.value = true;
     await nextTick();
     resizeTextarea();
     await scrollToBottom();
 
     try {
-        const res = await fetch(sendMessage.url(), {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                Accept: 'application/json',
-                'X-XSRF-TOKEN': getCsrfToken(),
-            },
-            body: JSON.stringify({ message: text }),
-        });
+        let data: { reply: string; imagePaths?: string[] };
 
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (hasImages) {
+            const formData = new FormData();
+            if (text) {
+                formData.append('message', text);
+            }
+            images.forEach((img) => formData.append('images[]', img.file));
 
-        const data = (await res.json()) as { reply: string };
+            const res = await fetch(sendImageMessage.url(), {
+                method: 'POST',
+                headers: {
+                    Accept: 'application/json',
+                    'X-XSRF-TOKEN': getCsrfToken(),
+                },
+                body: formData,
+            });
+
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            data = (await res.json()) as { reply: string; imagePaths: string[] };
+
+            // Replace previews with stored paths
+            const lastUserMsg = [...messages.value].reverse().find((m) => m.role === 'user' && m.imagePaths);
+            if (lastUserMsg && data.imagePaths) {
+                previews.forEach((p) => URL.revokeObjectURL(p));
+                lastUserMsg.imagePaths = data.imagePaths.map((p) => `/storage/${p}`);
+            }
+        } else {
+            const res = await fetch(sendMessage.url(), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Accept: 'application/json',
+                    'X-XSRF-TOKEN': getCsrfToken(),
+                },
+                body: JSON.stringify({ message: text }),
+            });
+
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            data = (await res.json()) as { reply: string };
+        }
+
         messages.value.push({ role: 'assistant', content: data.reply });
     } catch {
         messages.value.push({
@@ -163,7 +204,7 @@ async function handleSend(): Promise<void> {
 }
 
 function handleKeydown(event: KeyboardEvent): void {
-    if (event.key === 'Enter' && !event.shiftKey) {
+    if (event.key === 'Enter' && !event.shiftKey && hasContent.value) {
         event.preventDefault();
         void handleSend();
     }
@@ -263,6 +304,16 @@ function formatDuration(seconds: number): string {
 function getAudioUrl(messageId: number): string {
     return `/chat/audio/${messageId}`;
 }
+
+function getImageUrl(path: string): string {
+    // Blob previews or already prefixed paths pass through
+    if (path.startsWith('blob:') || path.startsWith('/storage/')) {
+        return path;
+    }
+    return `/storage/${path}`;
+}
+
+const hasContent = computed(() => messageInput.value.trim() || selectedImages.value.length > 0);
 </script>
 
 <template>
@@ -302,6 +353,22 @@ function getAudioUrl(messageId: number): string {
                                 : 'rounded-bl-sm bg-muted text-foreground'
                         "
                     >
+                        <!-- Imagens da mensagem -->
+                        <div
+                            v-if="message.imagePaths && message.imagePaths.length > 0"
+                            class="mb-2 flex flex-wrap gap-1.5"
+                            :class="message.imagePaths.length === 1 ? '' : 'grid grid-cols-2'"
+                        >
+                            <img
+                                v-for="(imgPath, imgIndex) in message.imagePaths"
+                                :key="imgIndex"
+                                :src="getImageUrl(imgPath)"
+                                :alt="`Imagem ${imgIndex + 1}`"
+                                class="max-h-48 rounded-lg object-cover"
+                                :class="message.imagePaths.length === 1 ? 'w-full' : 'w-full'"
+                            />
+                        </div>
+
                         <MarkdownMessage v-if="message.role === 'assistant'" :content="message.content" />
                         <p v-else class="whitespace-pre-wrap">{{ message.content }}</p>
 
@@ -433,7 +500,7 @@ function getAudioUrl(messageId: number): string {
                             <!-- Lado direito: mic + send -->
                             <div class="flex items-center gap-0.5">
                                 <Button
-                                    v-if="!messageInput.trim()"
+                                    v-if="!hasContent"
                                     type="button"
                                     size="icon"
                                     variant="ghost"
@@ -447,11 +514,11 @@ function getAudioUrl(messageId: number): string {
                                 </Button>
 
                                 <Button
-                                    v-if="messageInput.trim()"
+                                    v-if="hasContent"
                                     type="submit"
                                     size="icon"
                                     class="size-8 rounded-full"
-                                    :disabled="isLoading || recordingState !== 'idle'"
+                                    :disabled="isLoading || !hasContent || recordingState !== 'idle'"
                                 >
                                     <SendHorizontal class="size-4" />
                                 </Button>
