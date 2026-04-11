@@ -129,3 +129,49 @@ it('reads reference calories from configuration instead of hardcoded prompt data
     expect($result['items_for_registration'][0]['calories'])->toBe(140)
         ->and($result['calculation_lines'][0])->toContain('140/100');
 });
+
+it('returns low confidence items for unknown foods instead of blocking the whole meal', function () {
+    $user = User::factory()->create();
+
+    $mealService = Mockery::mock(MealService::class);
+    $mealService->shouldReceive('findSimilarItems')->times(3)->andReturn(collect());
+
+    $service = new MealEstimationService($mealService, new MealAmbiguityService);
+
+    $result = $service->estimate($user, 'almoco', [
+        ['description' => 'arroz', 'quantity_grams' => 120],
+        ['description' => 'kombucha', 'quantity_grams' => 300],
+        ['description' => 'baião de dois', 'quantity_grams' => 200],
+    ]);
+
+    expect($result['status'])->toBe('estimated')
+        ->and($result['next_step'])->toBe('register_meal')
+        ->and($result['items_for_registration'])->toHaveCount(1)
+        ->and($result['items_for_registration'][0]['description'])->toBe('arroz')
+        ->and($result['low_confidence_items'])->toHaveCount(2)
+        ->and($result['low_confidence_items'][0]['description'])->toBe('kombucha')
+        ->and($result['low_confidence_items'][0]['quantity_grams'])->toBe(300)
+        ->and($result['low_confidence_items'][1]['description'])->toBe('baião de dois')
+        ->and($result['user_facing_summary'])->toContain('estimativa do agente necessária')
+        ->and($result['assistant_response_guide'])->toContain('low_confidence_items');
+});
+
+it('returns all items as low confidence when none match the reference table', function () {
+    $user = User::factory()->create();
+
+    $mealService = Mockery::mock(MealService::class);
+    $mealService->shouldReceive('findSimilarItems')->once()->andReturn(collect());
+
+    $service = new MealEstimationService($mealService, new MealAmbiguityService);
+
+    $result = $service->estimate($user, 'lanche', [
+        ['description' => 'tacos mexicanos', 'quantity_grams' => 200],
+    ]);
+
+    expect($result['status'])->toBe('estimated')
+        ->and($result['next_step'])->toBe('register_meal')
+        ->and($result['items_for_registration'])->toHaveCount(0)
+        ->and($result['low_confidence_items'])->toHaveCount(1)
+        ->and($result['low_confidence_items'][0]['description'])->toBe('tacos mexicanos')
+        ->and($result['total_calories'])->toBe(0);
+});
