@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { nextTick, onMounted, ref, watch } from 'vue';
 import { Head, usePage } from '@inertiajs/vue3';
-import { Mic, SendHorizontal, Square, Utensils } from 'lucide-vue-next';
+import { ChevronDown, ImagePlus, Mic, SendHorizontal, Square, Utensils } from 'lucide-vue-next';
 import { sendAudioMessage, sendMessage } from '@/actions/App/Http/Controllers/ChatController';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Button } from '@/components/ui/button';
@@ -46,13 +46,47 @@ const messageInput = ref('');
 const isLoading = ref(false);
 const messagesContainer = ref<HTMLDivElement | null>(null);
 const textareaRef = ref<HTMLTextAreaElement | null>(null);
+const isAtBottom = ref(true);
+
+const imageInputRef = ref<HTMLInputElement | null>(null);
+const selectedImages = ref<{ file: File; preview: string }[]>([]);
 
 function resizeTextarea(): void {
     const el = textareaRef.value;
-    if (el) {
-        el.style.height = 'auto';
-        el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+    if (!el) return;
+    const maxHeight = 200;
+    el.style.height = 'auto';
+    const targetHeight = Math.min(el.scrollHeight, maxHeight);
+    requestAnimationFrame(() => {
+        if (!textareaRef.value) return;
+        textareaRef.value.style.height = targetHeight + 'px';
+        textareaRef.value.style.overflowY = targetHeight >= maxHeight ? 'auto' : 'hidden';
+    });
+}
+
+function triggerImagePicker(): void {
+    imageInputRef.value?.click();
+}
+
+function handleImageSelect(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    if (!input.files) return;
+
+    for (const file of Array.from(input.files)) {
+        if (file.type.startsWith('image/')) {
+            selectedImages.value.push({
+                file,
+                preview: URL.createObjectURL(file),
+            });
+        }
     }
+
+    input.value = '';
+}
+
+function removeImage(index: number): void {
+    URL.revokeObjectURL(selectedImages.value[index].preview);
+    selectedImages.value.splice(index, 1);
 }
 
 watch(messageInput, () => nextTick(resizeTextarea));
@@ -79,7 +113,14 @@ async function scrollToBottom(): Promise<void> {
     await nextTick();
     if (messagesContainer.value) {
         messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight;
+        isAtBottom.value = true;
     }
+}
+
+function handleMessagesScroll(): void {
+    const el = messagesContainer.value;
+    if (!el) return;
+    isAtBottom.value = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
 }
 
 onMounted(() => void scrollToBottom());
@@ -238,7 +279,7 @@ function getAudioUrl(messageId: number): string {
             </div>
 
             <!-- Área de mensagens -->
-            <div ref="messagesContainer" class="flex-1 space-y-3 overflow-y-auto px-4 py-4">
+            <div ref="messagesContainer" class="flex-1 space-y-3 overflow-y-auto px-4 py-4" @scroll="handleMessagesScroll">
                 <div
                     v-for="(message, index) in messages"
                     :key="index"
@@ -289,60 +330,134 @@ function getAudioUrl(messageId: number): string {
                 </div>
             </div>
 
-            <!-- Barra de input -->
-            <div class="shrink-0 border-t bg-background px-4 py-3">
-                <!-- Indicador de gravação -->
-                <div
-                    v-if="recordingState === 'recording'"
-                    class="mb-3 flex items-center justify-center gap-3 rounded-lg bg-destructive/10 px-4 py-2"
+            <!-- Botão scroll para o final -->
+            <div class="relative h-0">
+                <Transition
+                    enter-active-class="transition-all duration-200"
+                    enter-from-class="opacity-0 translate-y-2"
+                    leave-active-class="transition-all duration-150"
+                    leave-to-class="opacity-0 translate-y-2"
                 >
-                    <span class="size-2.5 animate-pulse rounded-full bg-destructive" />
-                    <span class="text-sm font-medium text-destructive">Gravando {{ formatDuration(recordingDuration) }}</span>
-                    <Button
-                        size="sm"
-                        variant="destructive"
-                        class="ml-2 h-7 rounded-full px-3 text-xs"
-                        @click="toggleRecording"
-                    >
-                        <Square class="mr-1 size-3" />
-                        Parar
-                    </Button>
-                </div>
-
-                <form class="flex items-end gap-2" @submit.prevent="handleSend">
-                    <textarea
-                        ref="textareaRef"
-                        v-model="messageInput"
-                        placeholder="O que você comeu hoje?"
-                        rows="1"
-                        class="placeholder:text-muted-foreground dark:bg-input/30 border-input flex-1 resize-none rounded-2xl border bg-muted px-4 py-2 text-sm leading-relaxed shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
-                        :disabled="isLoading || recordingState !== 'idle'"
-                        autocomplete="off"
-                        @keydown="handleKeydown"
-                    />
-
-                    <!-- Botão de microfone -->
-                    <Button
+                    <button
+                        v-if="!isAtBottom"
                         type="button"
-                        size="icon"
-                        class="shrink-0 rounded-full"
-                        :variant="recordingState === 'recording' ? 'destructive' : 'outline'"
-                        :disabled="isLoading || recordingState === 'sending'"
-                        @click="toggleRecording"
+                        class="absolute -top-12 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-input bg-background px-3 py-1.5 text-xs font-medium text-muted-foreground shadow-md hover:bg-muted hover:text-foreground"
+                        @click="scrollToBottom"
                     >
-                        <Square v-if="recordingState === 'recording'" class="size-4" />
-                        <Mic v-else class="size-4" />
-                    </Button>
+                        <ChevronDown class="size-3.5" />
+                        Ir para o final
+                    </button>
+                </Transition>
+            </div>
 
-                    <!-- Botão de enviar texto -->
-                    <Button
-                        type="submit"
-                        size="icon"
-                        class="shrink-0 rounded-full"
-                        :disabled="isLoading || !messageInput.trim() || recordingState !== 'idle'"
+            <!-- Barra de input estilo pill -->
+            <div class="shrink-0 bg-background px-3 pb-3 pt-2 sm:px-4">
+                <form @submit.prevent="handleSend">
+                    <div
+                        class="border-input bg-muted dark:bg-input/30 rounded-2xl border shadow-xs transition-shadow focus-within:border-ring focus-within:ring-ring/50 focus-within:ring-[3px]"
                     >
-                        <SendHorizontal class="size-4" />
-                    </Button>
+                        <!-- Preview de imagens selecionadas -->
+                        <div v-if="selectedImages.length > 0" class="flex gap-2 overflow-x-auto px-3 pt-3">
+                            <div
+                                v-for="(img, index) in selectedImages"
+                                :key="index"
+                                class="group relative size-16 shrink-0 overflow-hidden rounded-lg"
+                            >
+                                <img :src="img.preview" :alt="`Imagem ${index + 1}`" class="size-full object-cover" />
+                                <button
+                                    type="button"
+                                    class="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 transition-opacity group-hover:opacity-100"
+                                    @click="removeImage(index)"
+                                >
+                                    <span class="text-xs font-bold text-white">✕</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Indicador de gravação (dentro da pill) -->
+                        <div
+                            v-if="recordingState === 'recording'"
+                            class="flex items-center justify-center gap-3 px-4 py-3"
+                        >
+                            <span class="size-2.5 animate-pulse rounded-full bg-destructive" />
+                            <span class="text-sm font-medium text-destructive">Gravando {{ formatDuration(recordingDuration) }}</span>
+                            <Button
+                                size="sm"
+                                variant="destructive"
+                                class="ml-2 h-7 rounded-full px-3 text-xs"
+                                type="button"
+                                @click="toggleRecording"
+                            >
+                                <Square class="mr-1 size-3" />
+                                Parar
+                            </Button>
+                        </div>
+
+                        <!-- Textarea -->
+                        <textarea
+                            v-show="recordingState !== 'recording'"
+                            ref="textareaRef"
+                            v-model="messageInput"
+                            placeholder="O que você comeu hoje?"
+                            rows="1"
+                            class="placeholder:text-muted-foreground w-full resize-none bg-transparent px-4 pt-3 pb-1 text-sm leading-relaxed outline-none transition-[height] duration-150 ease-out disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
+                            :disabled="isLoading || recordingState !== 'idle'"
+                            autocomplete="off"
+                            @keydown="handleKeydown"
+                        />
+
+                        <!-- Linha de ações (dentro da pill) -->
+                        <div class="flex items-center justify-between px-2 pb-2 pt-1">
+                            <!-- Lado esquerdo: anexos -->
+                            <div class="flex items-center gap-0.5">
+                                <input
+                                    ref="imageInputRef"
+                                    type="file"
+                                    accept="image/*"
+                                    multiple
+                                    class="hidden"
+                                    @change="handleImageSelect"
+                                />
+                                <Button
+                                    type="button"
+                                    size="icon"
+                                    variant="ghost"
+                                    class="size-8 rounded-full text-muted-foreground hover:text-foreground"
+                                    :disabled="isLoading || recordingState !== 'idle'"
+                                    @click="triggerImagePicker"
+                                >
+                                    <ImagePlus class="size-4" />
+                                </Button>
+                            </div>
+
+                            <!-- Lado direito: mic + send -->
+                            <div class="flex items-center gap-0.5">
+                                <Button
+                                    v-if="!messageInput.trim()"
+                                    type="button"
+                                    size="icon"
+                                    variant="ghost"
+                                    class="size-8 rounded-full text-muted-foreground hover:text-foreground"
+                                    :class="recordingState === 'recording' ? 'text-destructive hover:text-destructive' : ''"
+                                    :disabled="isLoading || recordingState === 'sending'"
+                                    @click="toggleRecording"
+                                >
+                                    <Square v-if="recordingState === 'recording'" class="size-4" />
+                                    <Mic v-else class="size-4" />
+                                </Button>
+
+                                <Button
+                                    v-if="messageInput.trim()"
+                                    type="submit"
+                                    size="icon"
+                                    class="size-8 rounded-full"
+                                    :disabled="isLoading || recordingState !== 'idle'"
+                                >
+                                    <SendHorizontal class="size-4" />
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
                 </form>
             </div>
         </div>
