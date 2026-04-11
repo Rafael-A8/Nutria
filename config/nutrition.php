@@ -346,6 +346,12 @@ return [
                 'default_grams' => 10,
                 'is_cooking_fat' => true,
             ],
+            'azeite' => [
+                'aliases' => ['azeite', 'azeite de oliva', 'azeite extra virgem'],
+                'calories_per_100g' => 884,
+                'default_grams' => 5,
+                'is_cooking_fat' => true,
+            ],
             'óleo' => [
                 'aliases' => ['oleo', 'óleo', 'oleo de soja', 'óleo de soja'],
                 'calories_per_100g' => 884,

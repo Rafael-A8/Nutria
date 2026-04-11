@@ -59,11 +59,8 @@ function resizeTextarea(): void {
     const maxHeight = 200;
     el.style.height = 'auto';
     const targetHeight = Math.min(el.scrollHeight, maxHeight);
-    requestAnimationFrame(() => {
-        if (!textareaRef.value) return;
-        textareaRef.value.style.height = targetHeight + 'px';
-        textareaRef.value.style.overflowY = targetHeight >= maxHeight ? 'auto' : 'hidden';
-    });
+    el.style.height = targetHeight + 'px';
+    el.style.overflowY = targetHeight >= maxHeight ? 'auto' : 'hidden';
 }
 
 function triggerImagePicker(): void {

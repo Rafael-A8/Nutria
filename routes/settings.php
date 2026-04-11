@@ -25,4 +25,5 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::get('settings/ai-model', [AiModelController::class, 'edit'])->name('ai-model.edit');
     Route::patch('settings/ai-model', [AiModelController::class, 'update'])->name('ai-model.update');
+    Route::patch('settings/ai-model/instructions', [AiModelController::class, 'updateCustomInstructions'])->name('ai-model.update-instructions');
 });

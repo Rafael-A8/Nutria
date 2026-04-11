@@ -34,6 +34,7 @@ class AiModelController extends Controller
         return Inertia::render('settings/AiModel', [
             'currentModel' => $user->profile?->preferred_ai_model ?? AiModel::default()->value,
             'availableModels' => static::availableModels(),
+            'customInstructions' => $user->profile?->custom_instructions ?? '',
         ]);
     }
 
@@ -59,6 +60,34 @@ class AiModelController extends Controller
                 'goal' => 'manter',
                 'activity_level' => 'moderado',
                 'preferred_ai_model' => $validated['preferred_ai_model'],
+            ]);
+        }
+
+        return to_route('ai-model.edit');
+    }
+
+    /**
+     * Update the user's custom instructions for the AI agent.
+     */
+    public function updateCustomInstructions(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'custom_instructions' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        /** @var User $user */
+        $user = $request->user();
+
+        if ($user->profile) {
+            $user->profile->update(['custom_instructions' => $validated['custom_instructions'] ?? null]);
+        } else {
+            $user->profile()->create([
+                'gender' => 'não informado',
+                'birth_date' => now()->subYears(30)->toDateString(),
+                'height_cm' => 170,
+                'goal' => 'manter',
+                'activity_level' => 'moderado',
+                'custom_instructions' => $validated['custom_instructions'] ?? null,
             ]);
         }
 

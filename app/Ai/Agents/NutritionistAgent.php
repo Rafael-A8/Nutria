@@ -98,6 +98,16 @@ class NutritionistAgent implements Agent, Conversational, HasTools
 
         PROMPT;
 
+        $customInstructions = trim($profile?->custom_instructions ?? '');
+        if ($customInstructions !== '') {
+            $prompt .= <<<PROMPT
+
+            INSTRUÇÕES PERSONALIZADAS DO USUÁRIO (respeite sempre):
+            {$customInstructions}
+
+            PROMPT;
+        }
+
         if (! $profileComplete || $weightText === 'não informado') {
             $missing = [];
             if (! $profile?->gender) {
