@@ -172,6 +172,26 @@
     }
 }
 
+@media (min-width: 768px) {
+    .scrollbar-hide-mobile {
+        scrollbar-width: thin;
+        scrollbar-color: color-mix(in srgb, var(--muted-foreground) 25%, transparent) transparent;
+    }
+    .scrollbar-hide-mobile::-webkit-scrollbar {
+        width: 6px;
+    }
+    .scrollbar-hide-mobile::-webkit-scrollbar-track {
+        background: transparent;
+    }
+    .scrollbar-hide-mobile::-webkit-scrollbar-thumb {
+        background-color: color-mix(in srgb, var(--muted-foreground) 25%, transparent);
+        border-radius: 9999px;
+    }
+    .scrollbar-hide-mobile::-webkit-scrollbar-thumb:hover {
+        background-color: color-mix(in srgb, var(--muted-foreground) 40%, transparent);
+    }
+}
+
 @layer base {
     * {
         @apply border-border outline-ring/50;

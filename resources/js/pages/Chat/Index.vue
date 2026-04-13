@@ -141,14 +141,14 @@ function getCsrfToken(): string {
     );
 }
 
-async function scrollToBottom(): Promise<void> {
+async function scrollToBottom(smooth = true): Promise<void> {
     await nextTick();
     await nextTick();
 
     if (messagesContainer.value) {
         messagesContainer.value.scrollTo({
             top: messagesContainer.value.scrollHeight,
-            behavior: 'smooth',
+            behavior: smooth ? 'smooth' : 'instant',
         });
         isAtBottom.value = true;
     }
@@ -167,7 +167,7 @@ function handleMessagesScroll(): void {
 onMounted(() => {
     checkMobile();
     window.addEventListener('resize', checkMobile);
-    void scrollToBottom();
+    void scrollToBottom(false);
 });
 
 onUnmounted(() => {
