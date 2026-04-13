@@ -64,7 +64,10 @@ const maxChars = 1000;
                         title="Modelo de IA"
                         description="Escolha o modelo de inteligência artificial usado pelo assistente"
                     />
-                    <AiModelTabs :current-model="currentModel" :available-models="availableModels" />
+                    <AiModelTabs
+                        :current-model="currentModel"
+                        :available-models="availableModels"
+                    />
                 </div>
 
                 <div class="border-t pt-8">
@@ -75,18 +78,34 @@ const maxChars = 1000;
                     />
 
                     <div class="mt-3 space-y-2">
-                        <p class="text-muted-foreground text-xs leading-relaxed">
-                            Aqui você pode escrever sobre você, suas preferências e restrições alimentares. A Nutri vai usar essas informações para personalizar todas as respostas e sugestões.
+                        <p
+                            class="text-xs leading-relaxed text-muted-foreground"
+                        >
+                            Aqui você pode escrever sobre você, suas
+                            preferências e restrições alimentares. A Nutri vai
+                            usar essas informações para personalizar todas as
+                            respostas e sugestões.
                         </p>
 
-                        <div class="rounded-lg border border-dashed border-neutral-300 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900">
-                            <p class="text-muted-foreground mb-1 text-xs font-medium">Exemplos do que você pode escrever:</p>
-                            <ul class="text-muted-foreground list-inside list-disc space-y-0.5 text-xs">
+                        <div
+                            class="rounded-lg border border-dashed border-neutral-300 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900"
+                        >
+                            <p
+                                class="mb-1 text-xs font-medium text-muted-foreground"
+                            >
+                                Exemplos do que você pode escrever:
+                            </p>
+                            <ul
+                                class="list-inside list-disc space-y-0.5 text-xs text-muted-foreground"
+                            >
                                 <li>Sou vegetariano / vegano</li>
                                 <li>Tenho intolerância à lactose</li>
                                 <li>Sou diabético tipo 2</li>
                                 <li>Prefiro respostas curtas e diretas</li>
-                                <li>Sou do Nordeste e como muito cuscuz e tapioca</li>
+                                <li>
+                                    Sou do Nordeste e como muito cuscuz e
+                                    tapioca
+                                </li>
                                 <li>Estou em período de amamentação</li>
                                 <li>Me chame de apelido (ex: Rafa)</li>
                             </ul>
@@ -101,8 +120,9 @@ const maxChars = 1000;
                         />
 
                         <div class="flex items-center justify-between">
-                            <span class="text-muted-foreground text-xs">
-                                {{ form.custom_instructions?.length ?? 0 }} / {{ maxChars }} caracteres
+                            <span class="text-xs text-muted-foreground">
+                                {{ form.custom_instructions?.length ?? 0 }} /
+                                {{ maxChars }} caracteres
                             </span>
 
                             <div class="flex items-center gap-2">
@@ -112,7 +132,10 @@ const maxChars = 1000;
                                     leave-active-class="transition-opacity duration-200"
                                     leave-to-class="opacity-0"
                                 >
-                                    <span v-if="saved" class="text-xs text-green-600 dark:text-green-400">
+                                    <span
+                                        v-if="saved"
+                                        class="text-xs text-green-600 dark:text-green-400"
+                                    >
                                         Salvo!
                                     </span>
                                 </Transition>
@@ -127,7 +150,10 @@ const maxChars = 1000;
                             </div>
                         </div>
 
-                        <p v-if="form.errors.custom_instructions" class="text-xs text-red-500">
+                        <p
+                            v-if="form.errors.custom_instructions"
+                            class="text-xs text-red-500"
+                        >
                             {{ form.errors.custom_instructions }}
                         </p>
                     </div>

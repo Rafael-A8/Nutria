@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { Brain, Zap, type LucideIcon } from 'lucide-vue-next';
 import { router } from '@inertiajs/vue3';
+import { Brain, Zap } from 'lucide-vue-next';
+import type { LucideIcon } from 'lucide-vue-next';
 import { computed } from 'vue';
 
 interface AiModelOption {
@@ -20,8 +21,10 @@ const iconMap: Record<string, LucideIcon> = {
     zap: Zap,
 };
 
-const currentDescription = computed(() =>
-    props.availableModels.find((m) => m.value === props.currentModel)?.description,
+const currentDescription = computed(
+    () =>
+        props.availableModels.find((m) => m.value === props.currentModel)
+            ?.description,
 );
 
 function getIcon(icon: string): LucideIcon {
@@ -29,15 +32,21 @@ function getIcon(icon: string): LucideIcon {
 }
 
 function updateModel(value: string) {
-    router.patch('/settings/ai-model', { preferred_ai_model: value }, {
-        preserveScroll: true,
-    });
+    router.patch(
+        '/settings/ai-model',
+        { preferred_ai_model: value },
+        {
+            preserveScroll: true,
+        },
+    );
 }
 </script>
 
 <template>
     <div class="space-y-3">
-        <div class="inline-flex gap-1 rounded-lg bg-neutral-100 p-1 dark:bg-neutral-800">
+        <div
+            class="inline-flex gap-1 rounded-lg bg-neutral-100 p-1 dark:bg-neutral-800"
+        >
             <button
                 v-for="model in availableModels"
                 :key="model.value"
@@ -53,7 +62,7 @@ function updateModel(value: string) {
                 <span class="ml-1.5 text-sm">{{ model.label }}</span>
             </button>
         </div>
-        <p class="text-muted-foreground text-xs">
+        <p class="text-xs text-muted-foreground">
             {{ currentDescription }}
         </p>
     </div>

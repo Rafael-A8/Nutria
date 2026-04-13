@@ -162,6 +162,16 @@
     --sidebar: hsl(240 5.9% 10%);
 }
 
+@media (max-width: 767.98px) {
+    .scrollbar-hide-mobile {
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+    }
+    .scrollbar-hide-mobile::-webkit-scrollbar {
+        display: none;
+    }
+}
+
 @layer base {
     * {
         @apply border-border outline-ring/50;
