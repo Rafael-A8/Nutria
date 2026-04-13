@@ -146,8 +146,10 @@ async function scrollToBottom(): Promise<void> {
     await nextTick();
 
     if (messagesContainer.value) {
-        messagesContainer.value.scrollTop =
-            messagesContainer.value.scrollHeight;
+        messagesContainer.value.scrollTo({
+            top: messagesContainer.value.scrollHeight,
+            behavior: 'smooth',
+        });
         isAtBottom.value = true;
     }
 }
@@ -429,7 +431,7 @@ const hasContent = computed(
                         class="flex justify-end"
                     >
                         <div
-                            class="max-w-[85%] rounded-2xl rounded-br-sm bg-primary px-4 py-2.5 text-sm leading-relaxed text-primary-foreground sm:max-w-[70%]"
+                            class="max-w-[85%] rounded-2xl rounded-br-sm bg-primary px-4 py-2.5 text-[15px] leading-relaxed text-primary-foreground sm:max-w-[70%]"
                         >
                             <div
                                 v-if="
@@ -473,7 +475,7 @@ const hasContent = computed(
                             N
                         </div>
                         <div
-                            class="min-w-0 flex-1 text-sm leading-relaxed text-foreground sm:max-w-[85%]"
+                            class="min-w-0 flex-1 text-[15px] leading-relaxed text-foreground sm:max-w-[85%]"
                         >
                             <div
                                 v-if="
@@ -625,7 +627,7 @@ const hasContent = computed(
                             v-model="messageInput"
                             placeholder="O que você comeu hoje?"
                             rows="1"
-                            class="w-full resize-none bg-transparent px-4 pt-3 pb-1 text-sm leading-relaxed transition-[height] duration-150 ease-out outline-none placeholder:text-muted-foreground disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
+                            class="w-full resize-none bg-transparent px-4 pt-3 pb-1 text-[15px] leading-relaxed transition-[height] duration-150 ease-out outline-none placeholder:text-muted-foreground disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
                             :disabled="isLoading || recordingState !== 'idle'"
                             autocomplete="off"
                             @keydown="handleKeydown"
