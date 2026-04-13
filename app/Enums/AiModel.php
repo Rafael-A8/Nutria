@@ -6,7 +6,7 @@ use Laravel\Ai\Enums\Lab;
 
 enum AiModel: string
 {
-    case GeminiFlashLite = 'gemini-3.1-flash-preview';
+    case GeminiFlashLite = 'gemini-3-flash-preview';
     case GptFourOMini = 'gpt-4o-mini';
 
     /** Default model used when the user has no preference set. */
