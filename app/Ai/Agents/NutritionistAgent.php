@@ -2,6 +2,7 @@
 
 namespace App\Ai\Agents;
 
+use App\Ai\Middleware\Guardrails;
 use App\Ai\Tools\EstimateMealTool;
 use App\Ai\Tools\GetPeriodSummaryTool;
 use App\Ai\Tools\GetSimilarItemsTool;
@@ -25,6 +26,7 @@ use Laravel\Ai\Attributes\Provider;
 use Laravel\Ai\Concerns\RemembersConversations;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Conversational;
+use Laravel\Ai\Contracts\HasMiddleware;
 use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Promptable;
@@ -33,7 +35,7 @@ use Stringable;
 #[Provider('gemini')]
 #[Model(AiModel::GeminiFlashLite->value)]
 #[MaxSteps(8)]
-class NutritionistAgent implements Agent, Conversational, HasTools
+class NutritionistAgent implements Agent, Conversational, HasMiddleware, HasTools
 {
     use Promptable, RemembersConversations;
 
@@ -271,6 +273,18 @@ class NutritionistAgent implements Agent, Conversational, HasTools
     private function today(): string
     {
         return Carbon::now()->translatedFormat('l, d \d\e F \d\e Y');
+    }
+
+    /**
+     * Get the middleware available to the agent.
+     *
+     * @return array<class-string>
+     */
+    public function middleware(): array
+    {
+        return [
+            Guardrails::class,
+        ];
     }
 
     /**
