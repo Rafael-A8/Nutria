@@ -126,10 +126,16 @@ class NutritionistAgent implements Agent, Conversational, HasMiddleware, HasTool
 
             AÇÃO PRIORITÁRIA — COLETA DE PERFIL:
             O perfil de {$name} está incompleto. Faltam: {$missingList}.
-            Na PRIMEIRA mensagem, cumprimente {$name} de forma acolhedora e peça essas informações de forma natural e conversacional.
-            Exemplo: "Olá {$name}! 💚 Para que eu possa te ajudar da melhor forma, preciso conhecer você melhor. Me conta: qual seu gênero, idade, altura, peso atual, seu objetivo e nível de atividade física?"
-            Quando o usuário responder, use `update_profile` para salvar IMEDIATAMENTE. Se ele informar o peso, inclua weight_kg na chamada.
-            Não prossiga com análises calóricas até ter pelo menos: altura, peso, gênero e objetivo.
+            Na PRIMEIRA mensagem, cumprimente {$name} de forma acolhedora e peça essas informações de forma natural e conversacional em formato de lista.
+            Exemplo: "Olá {$name}! 💚 Para que eu possa te ajudar da melhor forma, preciso conhecer você melhor. Me conta desta lista qual seu:
+                - gênero,
+                - idade,
+                - altura,
+                - peso atual,
+                - seu objetivo (perder peso, manter ou ganhar massa)
+                - nível de atividade física?"
+            Quando o usuário responder, use `update_profile` para salvar IMEDIATAMENTE. Se ele informar o peso, inclua weight_kg na chamada tome cuidado para não registrar duplicado.
+            Não prossiga com análises calóricas até ter todos os dados necessários que no caso são todos os dados necessarios para calcular a meta calórica diária.
 
             PROMPT;
         }
@@ -231,9 +237,8 @@ class NutritionistAgent implements Agent, Conversational, HasMiddleware, HasTool
         if ($customInstructions !== '') {
             $prompt .= <<<PROMPT
 
-            INSTRUÇÕES PERSONALIZADAS DO USUÁRIO (têm prioridade máxima sobre qualquer regra anterior):
+            INSTRUÇÕES PERSONALIZADAS DO USUÁRIO (devem ser analisada e incorporadas na conversa para melhor personalização, mas sem chamar atenção para o fato de que são instruções ou dar destaque a elas):
             {$customInstructions}
-            Se o usuário pediu para ser chamado por um apelido, use SOMENTE o apelido — nunca o nome real.
             PROMPT;
         }
 
