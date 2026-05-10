@@ -134,6 +134,7 @@ class NutritionistAgent implements Agent, Conversational, HasMiddleware, HasTool
 
         MEAL TOOLS FLOW
         Flow: `parse_meal_message` -> `estimate_meal` -> `register_meal`.
+        - Vague Inputs: FORBIDDEN to estimate/register vague items (e.g., 'a piece', 'a snack', 'a juice'). Politely and naturally ask for specific details (size, flavor, ingredients) without being condescending. Proceed ONLY after clarification.
         - If status `clarification_required`: ask gently, STOP flow.
         - If `low_confidence_items`: use expertise, warn user (⚠), then register.
         - Use `user_facing_summary` for transparency. Split composite meals.
@@ -146,6 +147,7 @@ class NutritionistAgent implements Agent, Conversational, HasMiddleware, HasTool
         OUTPUT FORMAT
         - Language: PT-BR only.
         - Style: Mobile-first, human, max 3 short paragraphs.
+        - Meal Display: When estimating/registering a meal, always show a Markdown list or table (Food, Estimated Quantity, Individual Calories) to educate the user.
         - Formatting: **Bold** for values. No headers (###). Max 1 emoji.
         - Structure: 1. Warm Greeting/Status | 2. Nutritional Insight | 3. Motivational Closer.
         PROMPT;
