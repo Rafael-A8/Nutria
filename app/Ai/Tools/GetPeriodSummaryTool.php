@@ -20,7 +20,7 @@ class GetPeriodSummaryTool implements Tool
      */
     public function description(): Stringable|string
     {
-        return 'Retorna um resumo detalhado de alimentação e peso do usuário em um período específico. Use quando o usuário perguntar sobre um período passado (ex: "como foi meu mês de janeiro?", "como me saí na última semana?").';
+        return 'Returns a detailed summary of the user\'s meals and weight over a specific period. Use when the user asks about a past period (e.g., "how was my January?", "how did I do last week?").';
     }
 
     /**
@@ -31,8 +31,8 @@ class GetPeriodSummaryTool implements Tool
     public function schema(JsonSchema $schema): array
     {
         return [
-            'start_date' => $schema->string()->description('Data de início no formato YYYY-MM-DD')->required(),
-            'end_date' => $schema->string()->description('Data de fim no formato YYYY-MM-DD')->required(),
+            'start_date' => $schema->string()->description('Start date in YYYY-MM-DD format')->required(),
+            'end_date' => $schema->string()->description('End date in YYYY-MM-DD format')->required(),
         ];
     }
 

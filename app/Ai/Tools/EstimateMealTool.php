@@ -23,7 +23,7 @@ class EstimateMealTool implements Tool
      */
     public function description(): Stringable|string
     {
-        return 'Estima refeições de forma determinística antes do registro. Use depois de parse_meal_message quando o usuário relatar alimentos em texto livre. Se retornar status clarification_required, faça a pergunta sugerida e não registre ainda. Se retornar status estimated, use exatamente os items_for_registration na chamada de register_meal e aproveite user_facing_summary, calculation_lines e assistant_response_guide para montar a resposta final.';
+        return 'Deterministically estimates meals before registration. Use after parse_meal_message when the user describes food in free text. If status clarification_required is returned, ask the suggested question and do not register yet. If status estimated is returned, use exactly the items_for_registration in the register_meal call and leverage user_facing_summary, calculation_lines, and assistant_response_guide to craft the final response.';
     }
 
     /**
@@ -47,15 +47,15 @@ class EstimateMealTool implements Tool
     public function schema(JsonSchema $schema): array
     {
         return [
-            'meal_type' => $schema->string()->description('Tipo da refeição: cafe_da_manha, almoco, lanche, jantar, sobremesa, outro.')->required(),
+            'meal_type' => $schema->string()->description('Meal type: cafe_da_manha, almoco, lanche, jantar, sobremesa, outro.')->required(),
             'items' => $schema->array()->items(
                 $schema->object([
-                    'description' => $schema->string()->description('Descrição do alimento exatamente como o usuário descreveu.')->required(),
-                    'quantity_grams' => $schema->integer()->description('Peso em gramas, quando o usuário informou de forma explícita.'),
-                    'quantity_text' => $schema->string()->description('Medida caseira quando o usuário não deu gramas, por exemplo: 2 colheres de sopa, 1 unidade, 200 ml.'),
-                    'context' => $schema->string()->description('Contexto de consumo ou preparo quando isso muda a estimativa, por exemplo: usada no preparo do frango, servida por cima, virou molho no prato.'),
+                    'description' => $schema->string()->description('Food description exactly as described by the user.')->required(),
+                    'quantity_grams' => $schema->integer()->description('Weight in grams, if explicitly provided by the user.'),
+                    'quantity_text' => $schema->string()->description('Household measure if grams are not provided, e.g.: 2 colheres de sopa, 1 unidade, 200 ml.'),
+                    'context' => $schema->string()->description('Consumption or preparation context if it affects estimation, e.g.: usada no preparo do frango, servida por cima, virou molho no prato.'),
                 ])
-            )->min(1)->description('Itens da refeição a estimar antes do registro.')->required(),
+            )->min(1)->description('Items of the meal to estimate before registration.')->required(),
         ];
     }
 }

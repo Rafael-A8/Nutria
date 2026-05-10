@@ -18,7 +18,7 @@ class RegisterMealTool implements Tool
      */
     public function description(): Stringable|string
     {
-        return 'Registra uma refeição com seus itens. Use depois de estimate_meal e envie exatamente os items_for_registration retornados pela estimativa. Separe cada alimento consumido como um item individual com suas calorias efetivamente ingeridas. Ingredientes usados só no preparo devem considerar apenas a fração absorvida/consumida, não o total usado.';
+        return 'Registers a meal with its items. Use after estimate_meal and send exactly the items_for_registration returned by the estimation. Separate each consumed food as an individual item with its effectively ingested calories. Ingredients used only in preparation should consider only the absorbed/consumed fraction, not the total used.';
     }
 
     /**
@@ -29,14 +29,14 @@ class RegisterMealTool implements Tool
     public function schema(JsonSchema $schema): array
     {
         return [
-            'meal_type' => $schema->string()->description('Tipo da refeição: cafe_da_manha, almoco, lanche, jantar, sobremesa, outro.')->required(),
+            'meal_type' => $schema->string()->description('Meal type: cafe_da_manha, almoco, lanche, jantar, sobremesa, outro.')->required(),
             'items' => $schema->array()->items(
                 $schema->object([
-                    'description' => $schema->string()->description('Descrição do item consumido (ex: coxinha, arroz, feijão). Se houver estimativa por absorção no preparo, deixe isso claro na descrição.')->required(),
-                    'quantity_grams' => $schema->integer()->description('Peso em gramas, se informado pelo usuário. Null caso contrário.'),
-                    'calories' => $schema->integer()->description('Calorias efetivamente consumidas do item. Para óleo, manteiga e outros ingredientes usados só no preparo, informe apenas a fração absorvida/ingerida.')->required(),
+                    'description' => $schema->string()->description('Description of the consumed item (e.g.: coxinha, arroz, feijão). If there is estimation by absorption in preparation, make this clear in the description.')->required(),
+                    'quantity_grams' => $schema->integer()->description('Weight in grams, if provided by the user. Null otherwise.'),
+                    'calories' => $schema->integer()->description('Calories effectively consumed of the item. For oil, butter, and other ingredients used only in preparation, provide just the absorbed/ingested fraction.')->required(),
                 ])
-            )->min(1)->description('Lista de itens consumidos na refeição.')->required(),
+            )->min(1)->description('List of items consumed in the meal.')->required(),
         ];
     }
 

@@ -18,7 +18,7 @@ class GetTodaySummaryTool implements Tool
      */
     public function description(): Stringable|string
     {
-        return 'Retorna o resumo de calorias consumidas pelo usuário no dia de hoje, com detalhamento por refeição.';
+        return 'Returns the summary of calories consumed by the user today, detailed by meal.';
     }
 
     /**

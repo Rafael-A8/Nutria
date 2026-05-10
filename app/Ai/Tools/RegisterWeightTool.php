@@ -18,7 +18,7 @@ class RegisterWeightTool implements Tool
      */
     public function description(): Stringable|string
     {
-        return 'Registra o peso do usuário. Use quando o usuário informar seu peso atual.';
+        return 'Registers the user\'s weight. Use when the user provides their current weight.';
     }
 
     /**
@@ -29,7 +29,7 @@ class RegisterWeightTool implements Tool
     public function schema(JsonSchema $schema): array
     {
         return [
-            'weight_kg' => $schema->number()->description('Peso em quilogramas.')->required(),
+            'weight_kg' => $schema->number()->description('Weight in kilograms.')->required(),
         ];
     }
 

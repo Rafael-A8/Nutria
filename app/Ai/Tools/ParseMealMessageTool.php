@@ -20,7 +20,7 @@ class ParseMealMessageTool implements Tool
      */
     public function description(): Stringable|string
     {
-        return 'Transforma uma mensagem livre sobre refeição em itens estruturados antes da estimativa. Use antes de estimate_meal quando o usuário descrever a refeição em texto corrido. Se retornar status clarification_required, faça a pergunta sugerida e não estime nem registre ainda. Se retornar status parsed, use exatamente meal_type e items na chamada de estimate_meal.';
+        return 'Transforms a free-text meal message into structured items before estimation. Use before estimate_meal when the user describes the meal in running text. If it returns status clarification_required, ask the suggested question and do not estimate or register yet. If status parsed is returned, use exactly meal_type and items in the estimate_meal call.';
     }
 
     /**
@@ -43,8 +43,8 @@ class ParseMealMessageTool implements Tool
     public function schema(JsonSchema $schema): array
     {
         return [
-            'message' => $schema->string()->description('Mensagem bruta do usuário descrevendo a refeição.')->required(),
-            'meal_type_hint' => $schema->string()->description('Dica opcional de tipo de refeição quando o contexto já deixar isso claro: cafe_da_manha, almoco, lanche, jantar, sobremesa, outro.'),
+            'message' => $schema->string()->description('Raw user message describing the meal.')->required(),
+            'meal_type_hint' => $schema->string()->description('Optional meal type hint if the context already makes it clear: cafe_da_manha, almoco, lanche, jantar, sobremesa, outro.'),
         ];
     }
 }

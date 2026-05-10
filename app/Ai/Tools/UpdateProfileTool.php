@@ -18,7 +18,7 @@ class UpdateProfileTool implements Tool
      */
     public function description(): Stringable|string
     {
-        return 'Atualiza o perfil nutricional do usuário (gênero, data de nascimento, altura, objetivo, nível de atividade). Use quando o usuário informar dados pessoais como altura, gênero, objetivo ou nível de atividade. Se o usuário informar o peso, use register_weight em vez desta tool.';
+        return 'Updates the user\'s nutritional profile (gender, birth date, height, goal, activity level). Use when the user provides personal data like height, gender, goal or activity level. If the user provides weight, use register_weight instead of this tool.';
     }
 
     /**
@@ -29,12 +29,12 @@ class UpdateProfileTool implements Tool
     public function schema(JsonSchema $schema): array
     {
         return [
-            'gender' => $schema->string()->description('Gênero do usuário: masculino, feminino ou outro.'),
-            'birth_date' => $schema->string()->description('Data de nascimento no formato YYYY-MM-DD.'),
-            'height_cm' => $schema->integer()->description('Altura em centímetros (ex: 175).'),
-            'goal' => $schema->string()->description('Objetivo: perder_peso, manter_peso, ganhar_massa.'),
-            'activity_level' => $schema->string()->description('Nível de atividade: sedentario, leve, moderado, ativo, muito_ativo.'),
-            'weight_kg' => $schema->number()->description('Peso atual em kg. Se informado, será registrado no histórico de peso.'),
+            'gender' => $schema->string()->description('User gender: masculino, feminino or outro.'),
+            'birth_date' => $schema->string()->description('Birth date in YYYY-MM-DD format.'),
+            'height_cm' => $schema->integer()->description('Height in centimeters (e.g.: 175).'),
+            'goal' => $schema->string()->description('Goal: perder_peso, manter_peso, ganhar_massa.'),
+            'activity_level' => $schema->string()->description('Activity level: sedentario, leve, moderado, ativo, muito_ativo.'),
+            'weight_kg' => $schema->number()->description('Current weight in kg. If provided, it will be logged in the weight history.'),
         ];
     }
 

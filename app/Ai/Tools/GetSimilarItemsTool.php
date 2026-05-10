@@ -18,7 +18,7 @@ class GetSimilarItemsTool implements Tool
      */
     public function description(): Stringable|string
     {
-        return 'Busca itens de refeições anteriores similares a uma descrição. Use para consultar calorias de alimentos já registrados antes de estimar.';
+        return 'Searches for previous meal items similar to a description. Use to check calories of previously logged foods before estimating.';
     }
 
     /**
@@ -29,7 +29,7 @@ class GetSimilarItemsTool implements Tool
     public function schema(JsonSchema $schema): array
     {
         return [
-            'description' => $schema->string()->description('Descrição do alimento a buscar (ex: coxinha, arroz com feijão).')->required(),
+            'description' => $schema->string()->description('Description of the food to search for (e.g.: coxinha, arroz com feijão).')->required(),
         ];
     }
 
