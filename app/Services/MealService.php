@@ -51,7 +51,7 @@ class MealService
         $userItems = MealItem::query()
             ->whereHas('meal', fn ($q) => $q->where('user_id', $user->id))
             ->whereNotNull('embedding')
-            ->whereVectorSimilarTo('embedding', $embeddingQuery, minSimilarity: 0.4)
+            ->whereVectorSimilarTo('embedding', $embeddingQuery, minSimilarity: 0.75)
             ->limit($limit)
             ->get();
 
@@ -66,7 +66,7 @@ class MealService
             ->whereHas('meal', fn ($q) => $q->where('user_id', '!=', $user->id))
             ->whereNotIn('id', $excludeIds)
             ->whereNotNull('embedding')
-            ->whereVectorSimilarTo('embedding', $embeddingQuery, minSimilarity: 0.4)
+            ->whereVectorSimilarTo('embedding', $embeddingQuery, minSimilarity: 0.75)
             ->limit($remaining)
             ->get();
 
