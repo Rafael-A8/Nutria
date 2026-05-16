@@ -28,13 +28,25 @@ class ParseMealMessageTool implements Tool
      */
     public function handle(Request $request): Stringable|string
     {
-        return json_encode(
-            $this->mealMessageParsingService->parse(
-                message: $request['message'],
-                mealTypeHint: $request['meal_type_hint'] ?? null,
-            ),
-            JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
+        $result = $this->mealMessageParsingService->parse(
+            message: $request['message'],
+            mealTypeHint: $request['meal_type_hint'] ?? null,
         );
+
+        if ($result['status'] === 'clarification_required') {
+            return json_encode([
+                'status'                 => $result['status'],
+                'clarification_question' => $result['clarification_question'],
+                'clarification_reason'   => $result['clarification_reason'],
+            ], JSON_UNESCAPED_UNICODE);
+        }
+
+        return json_encode([
+            'status'    => $result['status'],
+            'meal_type' => $result['meal_type'],
+            'next_step' => $result['next_step'],
+            'items'     => $result['items'],
+        ], JSON_UNESCAPED_UNICODE);
     }
 
     /**

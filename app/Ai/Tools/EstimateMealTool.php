@@ -23,7 +23,7 @@ class EstimateMealTool implements Tool
      */
     public function description(): Stringable|string
     {
-        return 'Deterministically estimates meals before registration. Use after parse_meal_message when the user describes food in free text. If status clarification_required is returned, ask the suggested question and do not register yet. If status estimated is returned, use exactly the items_for_registration in the register_meal call and leverage user_facing_summary, calculation_lines, and assistant_response_guide to craft the final response.';
+        return 'Deterministically estimates meals before registration. Use after parse_meal_message when the user describes food in free text. If status clarification_required is returned, ask the suggested question and do not register yet. If status estimated is returned, use exactly the items_for_registration in the register_meal call and leverage user_facing_summary to craft the final response.';
     }
 
     /**
@@ -31,14 +31,30 @@ class EstimateMealTool implements Tool
      */
     public function handle(Request $request): Stringable|string
     {
-        return json_encode(
-            $this->mealEstimationService->estimate(
-                user: $this->user,
-                mealType: $request['meal_type'],
-                items: $request['items'],
-            ),
-            JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
+        $result = $this->mealEstimationService->estimate(
+            user: $this->user,
+            mealType: $request['meal_type'],
+            items: $request['items'],
         );
+
+        // Se precisa de clarificação, retorna só isso
+        if ($result['status'] === 'clarification_required') {
+            return json_encode([
+                'status'                => $result['status'],
+                'clarification_question' => $result['clarification_question'],
+                'clarification_reason'  => $result['clarification_reason'],
+            ], JSON_UNESCAPED_UNICODE);
+        }
+
+        // Senão, retorna só o que o agente precisa para continuar
+        return json_encode([
+            'status'               => $result['status'],
+            'meal_type'            => $result['meal_type'],
+            'total_calories'       => $result['total_calories'],
+            'low_confidence_items' => $result['low_confidence_items'],
+            'items_for_registration' => $result['items_for_registration'],
+            'user_facing_summary'  => $result['user_facing_summary'],
+        ], JSON_UNESCAPED_UNICODE);
     }
 
     /**
