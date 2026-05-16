@@ -41,7 +41,7 @@ class NutritionistAgent implements Agent, Conversational, HasMiddleware, HasTool
 
     protected function maxConversationMessages(): int
     {
-        return 30;
+        return 10;
     }
 
     /** @var array{total_calories: int, meal_count: int, meals: array<int, array{meal_type: string, calories: int}>}|null */
