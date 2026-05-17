@@ -18,7 +18,11 @@ class GetSimilarItemsTool implements Tool
      */
     public function description(): Stringable|string
     {
-        return 'Searches for previous meal items similar to a description. Use to check calories of previously logged foods before estimating.';
+        return 'Searches for previous meal items similar to an array of
+                descriptions. Call this AFTER parse_meal_message and
+                BEFORE estimate_meal. Batch and pass ALL identified food
+                items simultaneously in a single call to minimize
+                tool calls.';
     }
 
     /**
@@ -29,7 +33,11 @@ class GetSimilarItemsTool implements Tool
     public function schema(JsonSchema $schema): array
     {
         return [
-            'description' => $schema->string()->description('Description of the food to search for (e.g.: coxinha, arroz com feijão).')->required(),
+            'descriptions' => $schema->array()
+                ->items($schema->string())
+                ->min(1)
+                ->description('Array of food descriptions to search for simultaneously.')
+                ->required(),
         ];
     }
 
@@ -39,19 +47,23 @@ class GetSimilarItemsTool implements Tool
     public function handle(Request $request): Stringable|string
     {
         $service = new MealService;
-        $items = $service->findSimilarItems($this->user, $request['description']);
+        $lines = [];
 
-        if ($items->isEmpty()) {
+        foreach ($request['descriptions'] as $description) {
+            $items = $service->findSimilarItems($this->user, $description);
+
+            if ($items->isNotEmpty()) {
+                foreach ($items as $item) {
+                    $grams = $item->quantity_grams ? " ({$item->quantity_grams}g)" : '';
+                    $lines[] = "- {$item->description}{$grams}: {$item->calories} kcal";
+                }
+            }
+        }
+
+        if (empty($lines)) {
             return 'Nenhum item similar encontrado no histórico.';
         }
 
-        $lines = ['Itens similares encontrados:'];
-
-        foreach ($items as $item) {
-            $grams = $item->quantity_grams ? " ({$item->quantity_grams}g)" : '';
-            $lines[] = "- {$item->description}{$grams}: {$item->calories} kcal";
-        }
-
-        return implode("\n", $lines);
+        return "Itens similares encontrados:\n" . implode("\n", $lines);
     }
 }
