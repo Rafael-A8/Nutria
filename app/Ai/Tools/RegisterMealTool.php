@@ -18,7 +18,9 @@ class RegisterMealTool implements Tool
      */
     public function description(): Stringable|string
     {
-        return 'Registers a meal with its items. Use after estimate_meal and send exactly the items_for_registration returned by the estimation. Separate each consumed food as an individual item with its effectively ingested calories. Ingredients used only in preparation should consider only the absorbed/consumed fraction, not the total used.';
+       return 'Registers a meal after estimation.
+        ALWAYS call estimate_meal before this tool.
+        Never register without estimating first.';
     }
 
     /**

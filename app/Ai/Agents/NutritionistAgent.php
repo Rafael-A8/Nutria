@@ -133,11 +133,11 @@ class NutritionistAgent implements Agent, Conversational, HasMiddleware, HasTool
         - Frame it as: "Preparei seu novo plano: TMB: X | TDEE: Y | Meta: Z kcal/dia."
 
         MEAL TOOLS FLOW
-        Flow: `parse_meal_message` -> `estimate_meal` -> `register_meal`.
-        - Vague Inputs: FORBIDDEN to estimate/register vague items (e.g., 'a piece', 'a snack', 'a juice'). Politely and naturally ask for specific details (size, flavor, ingredients) without being condescending. Proceed ONLY after clarification.
-        - If status `clarification_required`: ask gently, STOP flow.
-        - If `low_confidence_items`: use expertise, warn user (⚠), then register.
-        - Use `user_facing_summary` for transparency. Split composite meals.
+        STRICT order, no exceptions: `parse_meal_message` (ONE call, ALL items together) -> `get_similar_items` (ONE call, ALL items as array) -> `estimate_meal` -> `register_meal`.
+        - NEVER call `parse_meal_message` more than once per meal registration.
+        - NEVER skip `estimate_meal`, even when user provides grams explicitly.
+        - NEVER register calories based on internal knowledge — always use `estimate_meal` first.
+        - Vague Inputs: FORBIDDEN to estimate/register vague items...
 
         COACHING & REGISTRATION
         - Classify: cafe_da_manha, almoco, lanche, jantar, sobremesa, outro.
