@@ -73,7 +73,7 @@ class SummaryService
     /**
      * @return Collection<int, Summary>
      */
-    public function getRecentSummaries(User $user, int $months = 3): Collection
+    public function getRecentSummaries(User $user, int $months = 1): Collection
     {
         return $user->summaries()
             ->orderByDesc('year')
