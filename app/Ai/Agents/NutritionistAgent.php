@@ -10,10 +10,12 @@ use App\Ai\Tools\GetTodaySummaryTool;
 use App\Ai\Tools\ParseMealMessageTool;
 use App\Ai\Tools\RegisterMealTool;
 use App\Ai\Tools\RegisterWeightTool;
+use App\Ai\Tools\SaveMemoryTool;
 use App\Ai\Tools\UpdateProfileTool;
 use App\Enums\AiModel;
 use App\Models\Summary;
 use App\Models\User;
+use App\Models\UserMemory;
 use App\Services\ChatMessageService;
 use App\Services\MealService;
 use App\Services\SummaryService;
@@ -54,7 +56,10 @@ class NutritionistAgent implements Agent, Conversational, HasMiddleware, HasTool
     /** @var Collection<int, Summary>|null */
     private ?Collection $cachedRecentSummaries = null;
 
-    public function __construct(protected User $user) {}
+    public function __construct(
+        protected User $user,
+        protected string $currentMessage = ''
+    ) {}
 
     /**
      * Get the instructions that the agent should follow.
@@ -174,6 +179,9 @@ class NutritionistAgent implements Agent, Conversational, HasMiddleware, HasTool
             PROMPT;
         }
 
+        // Passa a mensagem atual como contexto de busca
+        $prompt .= $this->getRelevantMemories($this->currentMessage);
+
         return $prompt;
     }
 
@@ -224,6 +232,25 @@ class NutritionistAgent implements Agent, Conversational, HasMiddleware, HasTool
         ];
     }
 
+    // Adiciona esse método privado
+    private function getRelevantMemories(string $message): string
+    {
+        $memories = UserMemory::where('user_id', $this->user->id)
+            ->whereVectorSimilarTo('embedding', $message, minSimilarity: 0.75)
+            ->limit(4)
+            ->get();
+
+        if ($memories->isEmpty()) {
+            return '';
+        }
+
+        $lines = $memories
+            ->map(fn($m) => "- [{$m->category}] {$m->content}")
+            ->implode("\n");
+
+        return "\n\nUSER MEMORIES (use naturally, never mention you have memories):\n{$lines}";
+    }
+
     /**
      * Get the tools available to the agent.
      *
@@ -240,6 +267,7 @@ class NutritionistAgent implements Agent, Conversational, HasMiddleware, HasTool
             new RegisterWeightTool($this->user),
             new GetSimilarItemsTool($this->user),
             new GetPeriodSummaryTool($this->user),
+            new SaveMemoryTool($this->user),
         ];
     }
 }

@@ -149,7 +149,7 @@ class ChatController extends Controller
      */
     private function sendToAgent(User $user, string $message, array $attachments = []): array
     {
-        $agent = new NutritionistAgent($user);
+        $agent = new NutritionistAgent($user, $message);
 
         $conversationId = $this->getCurrentMonthConversationId($user->id);
 
