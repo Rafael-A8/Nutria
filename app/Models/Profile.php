@@ -13,7 +13,7 @@ class Profile extends Model
 {
     /** @var array<string, mixed> */
     protected $attributes = [
-        'preferred_ai_model' => AiModel::GeminiFlashLite->value,
+        'preferred_ai_model' => AiModel::GeminiPro->value,
     ];
 
     use HasFactory;
