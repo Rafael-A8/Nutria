@@ -22,6 +22,7 @@ use App\Services\SummaryService;
 use App\Services\WeightLogService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
 use Laravel\Ai\Attributes\MaxSteps;
 use Laravel\Ai\Attributes\Model;
 use Laravel\Ai\Attributes\Provider;
@@ -66,6 +67,11 @@ class NutritionistAgent implements Agent, Conversational, HasMiddleware, HasTool
      */
     public function instructions(): Stringable|string
     {
+        Log::info('instructions chamado', [
+            'user_id'        => $this->user->id,
+            'currentMessage' => $this->currentMessage,
+        ]);
+
         $name = $this->user->name;
         $profile = $this->user->profile;
 
@@ -235,10 +241,20 @@ class NutritionistAgent implements Agent, Conversational, HasMiddleware, HasTool
     // Adiciona esse método privado
     private function getRelevantMemories(string $message): string
     {
+        Log::info('getRelevantMemories chamado', [
+            'user_id' => $this->user->id,
+            'message' => $message,
+        ]);
+
         $memories = UserMemory::where('user_id', $this->user->id)
             ->whereVectorSimilarTo('embedding', $message, minSimilarity: 0.75)
             ->limit(4)
             ->get();
+
+        Log::info('memorias encontradas', [
+            'count' => $memories->count(),
+            'memories' => $memories->pluck('content'),
+        ]);
 
         if ($memories->isEmpty()) {
             return '';
