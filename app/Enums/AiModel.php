@@ -6,21 +6,30 @@ use Laravel\Ai\Enums\Lab;
 
 enum AiModel: string
 {
-    case GeminiPro = 'gemini-3.1-pro-preview';
-    case GptFourO = 'gpt-4o';
+    case Gemini = 'gemini';
+    case OpenAI = 'openai';
+
+    /** Get the actual SDK model string for this enum case. */
+    public function sdkModel(): string
+    {
+        return match ($this) {
+            self::Gemini => 'gemini-3.1-pro-preview',
+            self::OpenAI => 'gpt-4o',
+        };
+    }
 
     /** Default model used when the user has no preference set. */
     public static function default(): self
     {
-        return self::GeminiPro;
+        return self::OpenAI;
     }
 
     /** Resolve the Lab provider for this model. */
     public function provider(): Lab
     {
         return match ($this) {
-            self::GeminiPro => Lab::Gemini,
-            self::GptFourO => Lab::OpenAI,
+            self::Gemini => Lab::Gemini,
+            self::OpenAI => Lab::OpenAI,
         };
     }
 
@@ -33,12 +42,12 @@ enum AiModel: string
     public function providerChain(): array
     {
         return match ($this) {
-            self::GeminiPro => [
-                Lab::Gemini->value => self::GeminiPro->value,
-                Lab::OpenAI->value => self::GptFourO->value,
+            self::Gemini => [
+                Lab::Gemini->value => self::Gemini->sdkModel(),
+                Lab::OpenAI->value => self::OpenAI->sdkModel(),
             ],
-            self::GptFourO => [
-                Lab::OpenAI->value => self::GptFourO->value,
+            self::OpenAI => [
+                Lab::OpenAI->value => self::OpenAI->sdkModel(),
             ],
         };
     }
@@ -46,24 +55,24 @@ enum AiModel: string
     public function label(): string
     {
         return match ($this) {
-            self::GeminiPro => 'Recomendado',
-            self::GptFourO => 'Alternativo',
+            self::Gemini => 'Gemini',
+            self::OpenAI => 'OpenAI',
         };
     }
 
     public function description(): string
     {
         return match ($this) {
-            self::GeminiPro => 'Gemini 3.1 Pro Preview — melhor em raciocínio',
-            self::GptFourO => 'GPT-4o — mais poderoso',
+            self::Gemini => 'Recomendado — mais inteligente e eficaz.',
+            self::OpenAI => 'Alternativo — modelo treinado pela OpenAI.',
         };
     }
 
     public function icon(): string
     {
         return match ($this) {
-            self::GeminiPro => 'brain',
-            self::GptFourO => 'zap',
+            self::Gemini => 'brain',
+            self::OpenAI => 'zap',
         };
     }
 

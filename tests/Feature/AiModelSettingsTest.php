@@ -42,11 +42,11 @@ test('it updates the preferred ai model to gemini', function () {
 
     $this->actingAs($user)
         ->patch(route('ai-model.update'), [
-            'preferred_ai_model' => AiModel::GeminiPro->value,
+            'preferred_ai_model' => AiModel::Gemini->value,
         ])
         ->assertRedirect(route('ai-model.edit'));
 
-    expect($user->profile->fresh()->preferred_ai_model)->toBe(AiModel::GeminiPro->value);
+    expect($user->profile->fresh()->preferred_ai_model)->toBe(AiModel::Gemini->value);
 });
 
 test('it creates profile when updating model if no profile exists', function () {
@@ -54,7 +54,7 @@ test('it creates profile when updating model if no profile exists', function () 
 
     $this->actingAs($user)
         ->patch(route('ai-model.update'), [
-            'preferred_ai_model' => AiModel::GeminiPro->value,
+            'preferred_ai_model' => AiModel::Gemini->value,
         ])
         ->assertRedirect(route('ai-model.edit'));
 

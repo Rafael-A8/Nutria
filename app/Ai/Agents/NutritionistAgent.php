@@ -35,8 +35,6 @@ use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Promptable;
 use Stringable;
 
-#[Provider('gemini')]
-#[Model(AiModel::GeminiPro->value)]
 #[MaxSteps(8)]
 class NutritionistAgent implements Agent, Conversational, HasMiddleware, HasTools
 {
@@ -62,16 +60,19 @@ class NutritionistAgent implements Agent, Conversational, HasMiddleware, HasTool
         protected string $currentMessage = ''
     ) {}
 
+    public function provider(): array
+    {
+        $preferred = $this->user->profile?->preferred_ai_model;
+        $model = AiModel::tryFrom($preferred ?? '') ?? AiModel::default();
+
+        return $model->providerChain();
+    }
+
     /**
      * Get the instructions that the agent should follow.
      */
     public function instructions(): Stringable|string
     {
-        Log::info('instructions chamado', [
-            'user_id'        => $this->user->id,
-            'currentMessage' => $this->currentMessage,
-        ]);
-
         $name = $this->user->name;
         $profile = $this->user->profile;
 
@@ -241,6 +242,10 @@ class NutritionistAgent implements Agent, Conversational, HasMiddleware, HasTool
     // Adiciona esse método privado
     private function getRelevantMemories(string $message): string
     {
+        if (empty(trim($message))) {
+            return '';
+        }
+
         Log::info('getRelevantMemories chamado', [
             'user_id' => $this->user->id,
             'message' => $message,
@@ -261,7 +266,7 @@ class NutritionistAgent implements Agent, Conversational, HasMiddleware, HasTool
         }
 
         $lines = $memories
-            ->map(fn($m) => "- [{$m->category}] {$m->content}")
+            ->map(fn ($m) => "- [{$m->category}] {$m->content}")
             ->implode("\n");
 
         return "\n\nUSER MEMORIES (use naturally, never mention you have memories):\n{$lines}";

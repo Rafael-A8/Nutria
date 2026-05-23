@@ -157,9 +157,7 @@ class ChatController extends Controller
             $this->summaryService->generateIfNeeded($user);
         }
 
-        $model = AiModel::tryFrom($user->profile?->preferred_ai_model ?? '') ?? AiModel::default();
-
-        $promptArgs = ['provider' => $model->providerChain()];
+        $promptArgs = [];
 
         if ($attachments !== []) {
             $promptArgs['attachments'] = $attachments;
