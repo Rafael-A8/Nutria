@@ -64,6 +64,6 @@ class GetSimilarItemsTool implements Tool
             return 'Nenhum item similar encontrado no histórico.';
         }
 
-        return "Itens similares encontrados:\n" . implode("\n", $lines);
+        return "Itens similares encontrados:\n".implode("\n", $lines);
     }
 }

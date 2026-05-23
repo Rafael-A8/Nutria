@@ -2,8 +2,8 @@
 
 namespace App\Ai\Tools;
 
-use App\Models\UserMemory;
 use App\Models\User;
+use App\Models\UserMemory;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Embeddings;
@@ -55,9 +55,9 @@ class SaveMemoryTool implements Tool
             ->generate();
 
         UserMemory::create([
-            'user_id'   => $this->user->id,
-            'content'   => $request['content'],
-            'category'  => $request['category'],
+            'user_id' => $this->user->id,
+            'content' => $request['content'],
+            'category' => $request['category'],
             'embedding' => $response->first(),
         ]);
 

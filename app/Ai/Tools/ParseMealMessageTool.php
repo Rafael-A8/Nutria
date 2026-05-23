@@ -35,17 +35,17 @@ class ParseMealMessageTool implements Tool
 
         if ($result['status'] === 'clarification_required') {
             return json_encode([
-                'status'                 => $result['status'],
+                'status' => $result['status'],
                 'clarification_question' => $result['clarification_question'],
-                'clarification_reason'   => $result['clarification_reason'],
+                'clarification_reason' => $result['clarification_reason'],
             ], JSON_UNESCAPED_UNICODE);
         }
 
         return json_encode([
-            'status'    => $result['status'],
+            'status' => $result['status'],
             'meal_type' => $result['meal_type'],
             'next_step' => $result['next_step'],
-            'items'     => $result['items'],
+            'items' => $result['items'],
         ], JSON_UNESCAPED_UNICODE);
     }
 

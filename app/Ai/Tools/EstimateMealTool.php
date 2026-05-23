@@ -40,20 +40,20 @@ class EstimateMealTool implements Tool
         // Se precisa de clarificação, retorna só isso
         if ($result['status'] === 'clarification_required') {
             return json_encode([
-                'status'                => $result['status'],
+                'status' => $result['status'],
                 'clarification_question' => $result['clarification_question'],
-                'clarification_reason'  => $result['clarification_reason'],
+                'clarification_reason' => $result['clarification_reason'],
             ], JSON_UNESCAPED_UNICODE);
         }
 
         // Senão, retorna só o que o agente precisa para continuar
         return json_encode([
-            'status'               => $result['status'],
-            'meal_type'            => $result['meal_type'],
-            'total_calories'       => $result['total_calories'],
+            'status' => $result['status'],
+            'meal_type' => $result['meal_type'],
+            'total_calories' => $result['total_calories'],
             'low_confidence_items' => $result['low_confidence_items'],
             'items_for_registration' => $result['items_for_registration'],
-            'user_facing_summary'  => $result['user_facing_summary'],
+            'user_facing_summary' => $result['user_facing_summary'],
         ], JSON_UNESCAPED_UNICODE);
     }
 
