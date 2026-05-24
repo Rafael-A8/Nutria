@@ -11,8 +11,8 @@ return new class extends Migration
         Schema::create('user_memories', function (Blueprint $table) {
             $table->id();
             $table->foreignId('user_id')
-                  ->constrained()
-                  ->cascadeOnDelete();
+                ->constrained()
+                ->cascadeOnDelete();
             $table->text('content');
             $table->string('category');
             $table->vector('embedding', 1536);
