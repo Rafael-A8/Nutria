@@ -81,7 +81,7 @@ it('includes profile collection instructions when profile is incomplete', functi
     $agent = new NutritionistAgent($user);
     $instructions = (string) $agent->instructions();
 
-    expect($instructions)->toContain('COLETA DE PERFIL')
+    expect($instructions)->toContain('PROFILE COLLECTION')
         ->and($instructions)->toContain('update_profile');
 });
 

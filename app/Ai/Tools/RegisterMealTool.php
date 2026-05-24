@@ -18,9 +18,7 @@ class RegisterMealTool implements Tool
      */
     public function description(): Stringable|string
     {
-       return 'Registers a meal after estimation.
-        ALWAYS call estimate_meal before this tool.
-        Never register without estimating first.';
+        return 'Registers a meal after estimation. ALWAYS call `estimate_meal` before this tool. Report "calories actually consumed" when providing values and, when applicable, the "fraction absorbed/consumed" for ingredients used only in preparation.';
     }
 
     /**
@@ -32,13 +30,9 @@ class RegisterMealTool implements Tool
     {
         return [
             'meal_type' => $schema->string()->description('Meal type: cafe_da_manha, almoco, lanche, jantar, sobremesa, outro.')->required(),
-            'items' => $schema->array()->items(
-                $schema->object([
-                    'description' => $schema->string()->description('Description of the consumed item (e.g.: coxinha, arroz, feijão). If there is estimation by absorption in preparation, make this clear in the description.')->required(),
-                    'quantity_grams' => $schema->integer()->description('Weight in grams, if provided by the user. Null otherwise.'),
-                    'calories' => $schema->integer()->description('Calories effectively consumed of the item. For oil, butter, and other ingredients used only in preparation, provide just the absorbed/ingested fraction.')->required(),
-                ])
-            )->min(1)->description('List of items consumed in the meal.')->required(),
+            'items' => $schema->string()
+                ->description('JSON formatted array of objects. Each object MUST contain EXACTLY: "description" (string, required, described item), "quantity_grams" (integer, optional, weight), "calories" (integer, required, consumed calories). Do NOT use nested objects in the tool call directly, serialize this array as a JSON string.')
+                ->required(),
         ];
     }
 
@@ -47,22 +41,26 @@ class RegisterMealTool implements Tool
      */
     public function handle(Request $request): Stringable|string
     {
+        $items = is_string($request['items']) ? json_decode($request['items'], true) : $request['items'];
+        $items = is_array($items) ? $items : [];
+
         $service = new MealService;
         $meal = $service->registerMeal($this->user, $request['meal_type']);
 
         $totalCalories = 0;
 
-        foreach ($request['items'] as $item) {
+        foreach ($items as $item) {
+            $calories = isset($item['calories']) ? (int) $item['calories'] : 0;
             $service->addItem(
                 $meal,
-                $item['description'],
+                $item['description'] ?? 'Item sem descrição',
                 $item['quantity_grams'] ?? null,
-                $item['calories'],
+                $calories,
             );
-            $totalCalories += $item['calories'];
+            $totalCalories += $calories;
         }
 
-        $itemCount = count($request['items']);
+        $itemCount = count($items);
 
         return "Refeição ({$request['meal_type']}) registrada com {$itemCount} item(ns). Total: {$totalCalories} kcal.";
     }

@@ -40,7 +40,17 @@ class SaveMemoryTool implements Tool
 
     public function handle(Request $request): Stringable|string
     {
-        // Verifica duplicata — SDK gera embedding internamente
+        // Primeiro, verifique duplicata exata pelo conteúdo — evita depender somente
+        // da busca por similaridade/embeddings em ambientes de teste.
+        $exact = UserMemory::where('user_id', $this->user->id)
+            ->where('content', $request['content'])
+            ->first();
+
+        if ($exact) {
+            return 'memory_already_exists';
+        }
+
+        // Verifica duplicata por similaridade — SDK gera embedding internamente
         $existing = UserMemory::where('user_id', $this->user->id)
             ->whereVectorSimilarTo('embedding', $request['content'], minSimilarity: 0.92)
             ->first();

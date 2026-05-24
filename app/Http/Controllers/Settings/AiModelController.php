@@ -52,13 +52,15 @@ class AiModelController extends Controller
         if ($user->profile) {
             $user->profile->update(['preferred_ai_model' => $validated['preferred_ai_model']]);
         } else {
+            // When creating a profile as part of changing model settings for a user
+            // without a profile, default to the application's default model value.
             $user->profile()->create([
                 'gender' => 'não informado',
                 'birth_date' => now()->subYears(30)->toDateString(),
                 'height_cm' => 170,
                 'goal' => 'manter',
                 'activity_level' => 'moderado',
-                'preferred_ai_model' => $validated['preferred_ai_model'],
+                'preferred_ai_model' => AiModel::default()->value,
             ]);
         }
 

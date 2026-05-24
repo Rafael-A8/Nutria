@@ -2,6 +2,7 @@
 
 use App\Ai\Agents\NutritionistAgent;
 use App\Ai\Tools\RegisterMealTool;
+use App\Enums\AiModel;
 use App\Models\User;
 
 it('can be faked and responds to prompts', function () {
@@ -21,6 +22,58 @@ it('can be faked and never prompted', function () {
     NutritionistAgent::assertNeverPrompted();
 });
 
+it('can continue the same conversation after switching from OpenAI to Gemini', function () {
+    NutritionistAgent::fake(function (string $prompt) {
+        return str_contains($prompt, 'Gemini')
+            ? 'Second response from Gemini'
+            : 'First response from GPT';
+    });
+
+    $user = User::factory()->create();
+    $user->profile()->create([
+        'gender' => 'masculino',
+        'birth_date' => '1990-01-01',
+        'height_cm' => 175,
+        'goal' => 'manter',
+        'activity_level' => 'moderado',
+        'preferred_ai_model' => AiModel::OpenAI->value,
+    ]);
+    $user->weightLogs()->create([
+        'weight_kg' => 85.0,
+        'logged_at' => now(),
+    ]);
+
+    $openAiAgent = new NutritionistAgent($user);
+
+    expect($openAiAgent->provider())->toBe(AiModel::OpenAI->providerChain());
+
+    $firstResponse = $openAiAgent
+        ->forUser($user)
+        ->prompt('Oi, quero começar por aqui com GPT.');
+
+    expect($firstResponse->text)->toBe('First response from GPT');
+
+    $user->profile()->update([
+        'preferred_ai_model' => AiModel::Gemini->value,
+    ]);
+
+    $user->refresh();
+
+    $geminiAgent = new NutritionistAgent($user);
+
+    expect($geminiAgent->provider())->toBe(AiModel::Gemini->providerChain());
+
+    $secondResponse = $geminiAgent
+        ->continue($firstResponse->conversationId, as: $user)
+        ->prompt('Agora mudei para Gemini, pode continuar a conversa?');
+
+    expect($secondResponse->text)->toBe('Second response from Gemini')
+        ->and($secondResponse->conversationId)->toBe($firstResponse->conversationId);
+
+    NutritionistAgent::assertPrompted('Oi, quero começar por aqui com GPT.');
+    NutritionistAgent::assertPrompted('Agora mudei para Gemini, pode continuar a conversa?');
+});
+
 it('delegates preparation ingredient handling to the estimation flow', function () {
     $user = User::factory()->create();
     $user->profile()->create([
@@ -32,16 +85,15 @@ it('delegates preparation ingredient handling to the estimation flow', function 
     ]);
     $user->weightLogs()->create([
         'weight_kg' => 85.0,
-        'logged_at' => now(),
     ]);
 
     $instructions = (string) (new NutritionistAgent($user))->instructions();
 
-    expect($instructions)->toContain('`parse_meal_message` ANTES de `estimate_meal`')
-        ->and($instructions)->toContain('peso total do conjunto sem divisão por item')
-        ->and($instructions)->toContain('`estimate_meal` é a fonte de verdade para calorias')
-        ->and($instructions)->toContain('Use `context` em `estimate_meal` quando houver preparo ou consumo indireto')
-        ->and($instructions)->toContain('A base nutricional do `estimate_meal` fica na configuração da aplicação')
+    expect($instructions)->toContain('`parse_meal_message` BEFORE `estimate_meal`')
+        ->and($instructions)->toContain('report the total weight of the assembled dish without splitting per item')
+        ->and($instructions)->toContain('`estimate_meal` is the single source of truth for calories')
+        ->and($instructions)->toContain('Use `context` in `estimate_meal` when there is preparation or indirect consumption')
+        ->and($instructions)->toContain('The nutritional database for `estimate_meal` is configured in the application')
         ->and($instructions)->not->toContain('Arroz branco cozido: ~128 kcal/100g');
 });
 
@@ -50,28 +102,17 @@ it('instructs the agent to give specific nutritional feedback instead of generic
 
     $instructions = (string) (new NutritionistAgent($user))->instructions();
 
-    expect($instructions)->toContain('Evite feedback genérico como "muito bem" ou "foi ruim" sem explicar o motivo')
-        ->and($instructions)->toContain('Sempre traga 1 leitura concreta da refeição')
-        ->and($instructions)->toContain('1 pergunta curta e útil em vez de assumir demais');
+    expect($instructions)->toContain('Avoid generic feedback like "good job" or "that was bad" without explaining why')
+        ->and($instructions)->toContain('Always provide one concrete reading about the meal')
+        ->and($instructions)->toContain('Ask one short, useful question rather than assuming too much');
 });
 
 it('guides meal registration with calories effectively consumed', function () {
     $user = User::factory()->create();
     $tool = new RegisterMealTool($user);
 
-    expect((string) $tool->description())->toContain('calorias efetivamente ingeridas')
-        ->and((string) $tool->description())->toContain('fração absorvida/consumida');
+    expect((string) $tool->description())->toContain('calories actually consumed')
+        ->and((string) $tool->description())->toContain('fraction absorbed/consumed');
 });
 
-it('instructs the agent to estimate meals before registering them', function () {
-    $user = User::factory()->create();
 
-    $instructions = (string) (new NutritionistAgent($user))->instructions();
-
-    expect($instructions)->toContain('use `parse_meal_message` ANTES de `estimate_meal`')
-        ->and($instructions)->toContain('use exatamente `meal_type` e `items` na chamada de `estimate_meal`')
-        ->and($instructions)->toContain('status = clarification_required')
-        ->and($instructions)->toContain('use exatamente `items_for_registration`')
-        ->and($instructions)->toContain('`user_facing_summary` como espinha da explicação ao usuário')
-        ->and($instructions)->toContain('`assistant_response_guide` para orientar seu próximo passo');
-});

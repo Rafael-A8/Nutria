@@ -20,4 +20,13 @@ class WeightLog extends Model
     {
         return $this->belongsTo(User::class);
     }
+
+    protected static function booted(): void
+    {
+        static::creating(function (self $model) {
+            if (empty($model->logged_at)) {
+                $model->logged_at = now();
+            }
+        });
+    }
 }

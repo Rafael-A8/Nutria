@@ -36,8 +36,10 @@ class ParseMealMessageTool implements Tool
         if ($result['status'] === 'clarification_required') {
             return json_encode([
                 'status' => $result['status'],
+                'next_step' => $result['next_step'] ?? 'ask_for_clarification',
                 'clarification_question' => $result['clarification_question'],
                 'clarification_reason' => $result['clarification_reason'],
+                'meal_total_quantity_grams' => $result['meal_total_quantity_grams'] ?? null,
             ], JSON_UNESCAPED_UNICODE);
         }
 

@@ -31,29 +31,34 @@ class EstimateMealTool implements Tool
      */
     public function handle(Request $request): Stringable|string
     {
+        $items = is_string($request['items']) ? json_decode($request['items'], true) : $request['items'];
+        $items = is_array($items) ? $items : [];
+
         $result = $this->mealEstimationService->estimate(
             user: $this->user,
             mealType: $request['meal_type'],
-            items: $request['items'],
+            items: $items,
         );
 
         // Se precisa de clarificação, retorna só isso
         if ($result['status'] === 'clarification_required') {
             return json_encode([
                 'status' => $result['status'],
+                'next_step' => 'ask_for_clarification',
                 'clarification_question' => $result['clarification_question'],
-                'clarification_reason' => $result['clarification_reason'],
+                'clarification_reason' => $result['clarification_reason'] ?? '',
             ], JSON_UNESCAPED_UNICODE);
         }
 
         // Senão, retorna só o que o agente precisa para continuar
         return json_encode([
             'status' => $result['status'],
-            'meal_type' => $result['meal_type'],
-            'total_calories' => $result['total_calories'],
-            'low_confidence_items' => $result['low_confidence_items'],
-            'items_for_registration' => $result['items_for_registration'],
-            'user_facing_summary' => $result['user_facing_summary'],
+            'next_step' => $result['next_step'] ?? 'register_meal',
+            'meal_type' => $result['meal_type'] ?? $request['meal_type'],
+            'total_calories' => $result['total_calories'] ?? 0,
+            'low_confidence_items' => $result['low_confidence_items'] ?? [],
+            'items_for_registration' => $result['items_for_registration'] ?? [],
+            'user_facing_summary' => $result['user_facing_summary'] ?? '',
         ], JSON_UNESCAPED_UNICODE);
     }
 
@@ -64,14 +69,9 @@ class EstimateMealTool implements Tool
     {
         return [
             'meal_type' => $schema->string()->description('Meal type: cafe_da_manha, almoco, lanche, jantar, sobremesa, outro.')->required(),
-            'items' => $schema->array()->items(
-                $schema->object([
-                    'description' => $schema->string()->description('Food description exactly as described by the user.')->required(),
-                    'quantity_grams' => $schema->integer()->description('Weight in grams, if explicitly provided by the user.'),
-                    'quantity_text' => $schema->string()->description('Household measure if grams are not provided, e.g.: 2 colheres de sopa, 1 unidade, 200 ml.'),
-                    'context' => $schema->string()->description('Consumption or preparation context if it affects estimation, e.g.: usada no preparo do frango, servida por cima, virou molho no prato.'),
-                ])
-            )->min(1)->description('Items of the meal to estimate before registration.')->required(),
+            'items' => $schema->string()
+                ->description('JSON formatted array of objects. Each object MUST contain EXACTLY: "description" (string, required), "quantity_grams" (integer, optional), "quantity_text" (string, optional), "context" (string, optional). Serialize this array as a JSON string.')
+                ->required(),
         ];
     }
 }

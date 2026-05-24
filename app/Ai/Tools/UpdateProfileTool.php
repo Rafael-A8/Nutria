@@ -29,12 +29,12 @@ class UpdateProfileTool implements Tool
     public function schema(JsonSchema $schema): array
     {
         return [
-            'gender' => $schema->string()->description('User gender: masculino, feminino or outro.'),
-            'birth_date' => $schema->string()->description('Birth date in YYYY-MM-DD format.'),
-            'height_cm' => $schema->integer()->description('Height in centimeters (e.g.: 175).'),
-            'goal' => $schema->string()->description('Goal: perder_peso, manter_peso, ganhar_massa.'),
-            'activity_level' => $schema->string()->description('Activity level: sedentario, leve, moderado, ativo, muito_ativo.'),
-            'weight_kg' => $schema->number()->description('Current weight in kg. If provided, it will be logged in the weight history.'),
+            'gender' => $schema->string()->description('User gender: masculino, feminino or outro.')->required(),
+            'birth_date' => $schema->string()->description('Birth date in YYYY-MM-DD format.')->required(),
+            'height_cm' => $schema->integer()->description('Height in centimeters (e.g.: 175).')->required(),
+            'goal' => $schema->string()->description('Goal: perder_peso, manter_peso, ganhar_massa.')->required(),
+            'activity_level' => $schema->string()->description('Activity level: sedentario, leve, moderado, ativo, muito_ativo.')->required(),
+            'weight_kg' => $schema->number()->description('Current weight in kg. If provided, it will be logged in the weight history.')->required(),
         ];
     }
 
