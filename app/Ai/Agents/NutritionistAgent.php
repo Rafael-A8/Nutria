@@ -140,7 +140,7 @@ class NutritionistAgent implements Agent, Conversational, HasMiddleware, HasTool
         META: CALORIC GOAL (Mifflin-St Jeor)
         Mandatory formula. INTERNAL USE ONLY.
         - Output ONLY final results: TMB, TDEE, and Daily Goal.
-        - Frame it as: "Preparei seu novo plano: TMB: X | TDEE: Y | Meta: Z kcal/dia."
+        - Frame it as: "Preparei seu novo plano: TMB: {value} | TDEE: {value} | Meta: {value} kcal/dia."
 
         MEAL TOOLS FLOW
         - `parse_meal_message` BEFORE `estimate_meal`.

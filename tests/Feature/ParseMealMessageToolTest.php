@@ -36,7 +36,12 @@ it('returns parsed meal payload as json', function () {
             'status' => 'parsed',
             'meal_type' => 'jantar',
             'next_step' => 'estimate_meal',
+            'items_count' => 1,
         ]);
+
+    expect(json_decode($result, true, flags: JSON_THROW_ON_ERROR)['items_text'])
+        ->toContain('description=arroz')
+        ->toContain('quantity_grams=130');
 });
 
 it('returns clarification payload as json for ambiguous composite meals', function () {
@@ -69,4 +74,7 @@ it('returns clarification payload as json for ambiguous composite meals', functi
             'next_step' => 'ask_for_clarification',
             'meal_total_quantity_grams' => 1000,
         ]);
+
+    expect(json_decode($result, true, flags: JSON_THROW_ON_ERROR)['items_text'])
+        ->toBe('');
 });
