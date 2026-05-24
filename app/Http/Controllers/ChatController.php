@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Ai\Agents\NutritionistAgent;
-use App\Enums\AiModel;
 use App\Http\Requests\SendAudioMessageRequest;
 use App\Http\Requests\SendImageMessageRequest;
 use App\Http\Requests\SendMessageRequest;
