@@ -144,10 +144,11 @@ class NutritionistAgent implements Agent, Conversational, HasMiddleware, HasTool
 
         MEAL TOOLS FLOW
         - `parse_meal_message` BEFORE `estimate_meal`.
-        - Use `get_similar_items` to find similar historical items.
+        - `parse_meal_message` returns `items_text` as plain text lines. Copy it directly into `estimate_meal` without converting to JSON.
+        - Use `get_similar_items` with one description per line.
         - When a dish is prepared (e.g., salad, plated dish), report the total weight of the assembled dish without splitting per item.
         - `estimate_meal` is the single source of truth for calories.
-        - Call `register_meal` only after `estimate_meal` with `items_for_registration`.
+        - `estimate_meal` returns `items_for_registration_text`. Copy that text directly into `register_meal` without converting to JSON.
 
         COACHING & REGISTRATION
         - Classify meals as: cafe_da_manha, almoco, lanche, jantar, sobremesa, outro.
@@ -159,7 +160,7 @@ class NutritionistAgent implements Agent, Conversational, HasMiddleware, HasTool
         OUTPUT FORMAT
         - Language: PT-BR only.
         - Style: Mobile-first, human, max 3 short paragraphs.
-        - Meal Display: When estimating/registering a meal, always show a Markdown list or table (Food, Estimated Quantity, Individual Calories) to educate the user.
+        - Meal Display: When estimating/registering a meal, always show the plain text item lines returned by the tools. Do not invent JSON.
         - Use `context` in `estimate_meal` when there is preparation or indirect consumption.
         - The nutritional database for `estimate_meal` is configured in the application.
         - Formatting: **Bold** for values. No headers (###). Max 1 emoji.

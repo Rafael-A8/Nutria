@@ -18,7 +18,7 @@ class RegisterMealTool implements Tool
      */
     public function description(): Stringable|string
     {
-        return 'Registers a meal after estimation. ALWAYS call `estimate_meal` before this tool. Report "calories actually consumed" when providing values and, when applicable, the "fraction absorbed/consumed" for ingredients used only in preparation.';
+        return 'Registers a meal after estimation. ALWAYS call `estimate_meal` before this tool. Use the plain text item lines returned by `estimate_meal` and report calories actually consumed when providing values.';
     }
 
     /**
@@ -31,7 +31,7 @@ class RegisterMealTool implements Tool
         return [
             'meal_type' => $schema->string()->description('Meal type: cafe_da_manha, almoco, lanche, jantar, sobremesa, outro.')->required(),
             'items' => $schema->string()
-                ->description('JSON formatted array of objects. Each object MUST contain EXACTLY: "description" (string, required, described item), "quantity_grams" (integer, optional, weight), "calories" (integer, required, consumed calories). Do NOT use nested objects in the tool call directly, serialize this array as a JSON string.')
+                ->description('One item per line. Use: description=...; quantity_grams=...; calories=.... Leave empty values blank. Do not use JSON.')
                 ->required(),
         ];
     }
@@ -41,8 +41,7 @@ class RegisterMealTool implements Tool
      */
     public function handle(Request $request): Stringable|string
     {
-        $items = is_string($request['items']) ? json_decode($request['items'], true) : $request['items'];
-        $items = is_array($items) ? $items : [];
+        $items = $this->normalizeItems($request['items'] ?? '');
 
         $service = new MealService;
         $meal = $service->registerMeal($this->user, $request['meal_type']);
@@ -62,6 +61,80 @@ class RegisterMealTool implements Tool
 
         $itemCount = count($items);
 
-        return "Refeição ({$request['meal_type']}) registrada com {$itemCount} item(ns). Total: {$totalCalories} kcal.";
+        return json_encode([
+            'status' => 'registered',
+            'meal_type' => $request['meal_type'],
+            'item_count' => $itemCount,
+            'total_calories' => $totalCalories,
+            'summary' => "Meal ({$request['meal_type']}) registered with {$itemCount} item(s). Total: {$totalCalories} kcal.",
+        ], JSON_UNESCAPED_UNICODE);
+    }
+
+    /**
+     * @return list<array{description: string, quantity_grams: int|null, calories: int}>
+     */
+    private function normalizeItems(mixed $items): array
+    {
+        if (is_array($items)) {
+            return array_values(array_filter($items, fn ($item) => is_array($item)));
+        }
+
+        if (! is_string($items) || trim($items) === '') {
+            return [];
+        }
+
+        $lines = preg_split('/\R+/', trim($items)) ?: [];
+
+        return collect($lines)
+            ->map(fn (string $line) => $this->parseLineItem($line))
+            ->filter(fn (?array $item) => $item !== null)
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return array{description: string, quantity_grams: int|null, calories: int}|null
+     */
+    private function parseLineItem(string $line): ?array
+    {
+        $line = trim($line);
+
+        if ($line === '') {
+            return null;
+        }
+
+        if (! str_contains($line, '=')) {
+            return [
+                'description' => $line,
+                'quantity_grams' => null,
+                'calories' => 0,
+            ];
+        }
+
+        $data = [];
+
+        foreach (explode(';', $line) as $part) {
+            [$key, $value] = array_pad(array_map('trim', explode('=', $part, 2)), 2, '');
+
+            if ($key === '') {
+                continue;
+            }
+
+            $data[$key] = $value;
+        }
+
+        if (! isset($data['description'])) {
+            return null;
+        }
+
+        return [
+            'description' => $data['description'],
+            'quantity_grams' => isset($data['quantity_grams']) && $data['quantity_grams'] !== ''
+                ? (int) $data['quantity_grams']
+                : null,
+            'calories' => isset($data['calories']) && $data['calories'] !== ''
+                ? (int) $data['calories']
+                : 0,
+        ];
     }
 }
