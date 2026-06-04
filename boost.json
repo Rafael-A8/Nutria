@@ -2,11 +2,12 @@
     "agents": [
         "claude_code",
         "copilot",
-        "gemini"
+        "codex"
     ],
+    "cloud": false,
     "guidelines": true,
     "mcp": true,
-    "nightwatch_mcp": false,
+    "nightwatch": false,
     "sail": true,
     "skills": [
         "ai-sdk-development",
