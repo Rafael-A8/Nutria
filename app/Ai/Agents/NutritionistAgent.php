@@ -3,6 +3,7 @@
 namespace App\Ai\Agents;
 
 use App\Ai\Middleware\Guardrails;
+use App\Ai\Middleware\InjectMemories;
 use App\Ai\Tools\EstimateMealTool;
 use App\Ai\Tools\GetPeriodSummaryTool;
 use App\Ai\Tools\GetSimilarItemsTool;
@@ -15,14 +16,12 @@ use App\Ai\Tools\UpdateProfileTool;
 use App\Enums\AiModel;
 use App\Models\Summary;
 use App\Models\User;
-use App\Models\UserMemory;
 use App\Services\ChatMessageService;
 use App\Services\MealService;
 use App\Services\SummaryService;
 use App\Services\WeightLogService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Log;
 use Laravel\Ai\Attributes\MaxSteps;
 use Laravel\Ai\Concerns\RemembersConversations;
 use Laravel\Ai\Contracts\Agent;
@@ -53,10 +52,7 @@ class NutritionistAgent implements Agent, Conversational, HasMiddleware, HasTool
     /** @var Collection<int, Summary>|null */
     private ?Collection $cachedRecentSummaries = null;
 
-    public function __construct(
-        protected User $user,
-        protected string $currentMessage = ''
-    ) {}
+    public function __construct(protected User $user) {}
 
     public function provider(): array
     {
@@ -179,9 +175,6 @@ class NutritionistAgent implements Agent, Conversational, HasMiddleware, HasTool
             $prompt .= "\n\nPrevious months summary (use for context, do not repeat to user unless asked):\n{$summaryContext}";
         }
 
-        // Passa a mensagem atual como contexto de busca
-        $prompt .= $this->getRelevantMemories($this->currentMessage);
-
         return $prompt;
     }
 
@@ -223,46 +216,14 @@ class NutritionistAgent implements Agent, Conversational, HasMiddleware, HasTool
     /**
      * Get the middleware available to the agent.
      *
-     * @return array<class-string>
+     * @return array<int, class-string|object>
      */
     public function middleware(): array
     {
         return [
             Guardrails::class,
+            new InjectMemories($this->user),
         ];
-    }
-
-    // Adiciona esse método privado
-    private function getRelevantMemories(string $message): string
-    {
-        if (empty(trim($message))) {
-            return '';
-        }
-
-        Log::info('getRelevantMemories chamado', [
-            'user_id' => $this->user->id,
-            'message' => $message,
-        ]);
-
-        $memories = UserMemory::where('user_id', $this->user->id)
-            ->whereVectorSimilarTo('embedding', $message, minSimilarity: 0.75)
-            ->limit(4)
-            ->get();
-
-        Log::info('memorias encontradas', [
-            'count' => $memories->count(),
-            'memories' => $memories->pluck('content'),
-        ]);
-
-        if ($memories->isEmpty()) {
-            return '';
-        }
-
-        $lines = $memories
-            ->map(fn ($m) => "- [{$m->category}] {$m->content}")
-            ->implode("\n");
-
-        return "\n\nUSER MEMORIES (use naturally, never mention you have memories):\n{$lines}";
     }
 
     /**

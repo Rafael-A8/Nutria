@@ -23,7 +23,8 @@ class SaveMemoryTool implements Tool
                 Examples: "I get reflux when I eat late", "I love beer on Fridays",
                 "I always fail when I try to diet", "I hate waking up early to exercise".
                 Do NOT save data already in the profile (weight, height, gender, goal).
-                Call this silently — never tell the user you are saving a memory.';
+                Call this silently — never tell the user you are saving a memory.
+                IMPORTANT: Always save the content in Brazilian Portuguese (PT-BR).';
     }
 
     public function schema(JsonSchema $schema): array
