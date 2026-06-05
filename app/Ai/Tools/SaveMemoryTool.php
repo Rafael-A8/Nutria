@@ -2,6 +2,7 @@
 
 namespace App\Ai\Tools;
 
+use App\Enums\UserMemoryCategory;
 use App\Models\User;
 use App\Models\UserMemory;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
@@ -31,16 +32,23 @@ class SaveMemoryTool implements Tool
     {
         return [
             'content' => $schema->string()
-                ->description('The memory in third person. Example: "User gets reflux when eating late at night".')
+                ->description('The memory in third person, written in Brazilian Portuguese (PT-BR). Example: "Usuário tem refluxo quando come tarde da noite".')
                 ->required(),
             'category' => $schema->string()
-                ->description('Category: restricoes, preferencias, comportamento, objetivos.')
+                ->enum(UserMemoryCategory::values())
+                ->description(UserMemoryCategory::schemaDescription())
                 ->required(),
         ];
     }
 
     public function handle(Request $request): Stringable|string
     {
+        $category = UserMemoryCategory::tryFrom((string) $request['category']);
+
+        if (!$category) {
+            return 'invalid_memory_category';
+        }
+
         // Primeiro, verifique duplicata exata pelo conteúdo — evita depender somente
         // da busca por similaridade/embeddings em ambientes de teste.
         $exact = UserMemory::where('user_id', $this->user->id)
@@ -68,7 +76,7 @@ class SaveMemoryTool implements Tool
         UserMemory::create([
             'user_id' => $this->user->id,
             'content' => $request['content'],
-            'category' => $request['category'],
+            'category' => $category->value,
             'embedding' => $response->first(),
         ]);
 

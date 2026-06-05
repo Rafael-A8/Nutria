@@ -2,6 +2,7 @@
 
 namespace App\Ai\Middleware;
 
+use App\Enums\UserMemoryCategory;
 use App\Models\User;
 use App\Models\UserMemory;
 use Closure;
@@ -11,7 +12,7 @@ use Laravel\Ai\Prompts\AgentPrompt;
 
 class InjectMemories
 {
-    private const float MIN_SIMILARITY = 0.45;
+    private const float MIN_SIMILARITY = 0.35;
 
     private const int LIMIT = 4;
 
@@ -28,7 +29,23 @@ class InjectMemories
             return $next($prompt);
         }
 
-        $memories = $this->searchRelevantMemories($message);
+        $memories = $this->getPriorityMemories()
+            ->concat($this->searchRelevantMemories($message))
+            ->unique('id')
+            ->values();
+
+        if (app()->environment('local')) {
+            Log::info('InjectMemories final memories selected', [
+                'user_id' => $this->user->id,
+                'message' => $message,
+                'count' => $memories->count(),
+                'memories' => $memories->map(fn (UserMemory $memory) => [
+                    'id' => $memory->id,
+                    'category' => $memory->category,
+                    'content' => $memory->content,
+                ])->values(),
+            ]);
+        }
 
         if ($memories->isEmpty()) {
             return $next($prompt);
@@ -40,35 +57,31 @@ class InjectMemories
     /**
      * @return Collection<int, UserMemory>
      */
+    private function getPriorityMemories(): Collection
+    {
+        return UserMemory::query()
+            ->whereBelongsTo($this->user)
+            ->whereIn('category', UserMemoryCategory::priorityValues())
+            ->latest()
+            ->limit(10)
+            ->get();
+    }
+
+    /**
+     * @return Collection<int, UserMemory>
+     */
     private function searchRelevantMemories(string $message): Collection
     {
         if (! UserMemory::query()->whereBelongsTo($this->user)->exists()) {
             return collect();
         }
 
-        Log::info('InjectMemories semantic search started', [
-            'user_id' => $this->user->id,
-            'message' => $message,
-        ]);
-
-        $memories = UserMemory::query()
+        return UserMemory::query()
             ->whereBelongsTo($this->user)
+            ->whereIn('category', UserMemoryCategory::contextualValues())
             ->whereVectorSimilarTo('embedding', $message, minSimilarity: self::MIN_SIMILARITY)
             ->limit(self::LIMIT)
             ->get();
-
-        Log::info('InjectMemories semantic search completed', [
-            'user_id' => $this->user->id,
-            'count' => $memories->count(),
-        ]);
-
-        Log::info('InjectMemories debug', [
-            'message'  => $message,
-            'count'    => $memories->count(),
-            'memories' => $memories->pluck('content'),
-        ]);
-
-        return $memories;
     }
 
     /**
