@@ -2,8 +2,11 @@
 
 namespace App\Services;
 
-use App\Models\Summary;
+use App\Enums\ConversationSummaryTriggerType;
+use App\Enums\ConversationSummaryType;
 use App\Models\User;
+use App\Models\UserConversationSummary;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
@@ -18,49 +21,50 @@ class SummaryService
     ) {}
 
     /**
-     * Generate a summary for the previous month if needed.
-     * Called on the first message of a new month.
+     * Generate a summary for the previous completed conversation cycle if needed.
      */
-    public function generateIfNeeded(User $user): ?Summary
+    public function generateConversationCycleSummaryIfNeeded(User $user): ?UserConversationSummary
     {
-        $previousMonth = Carbon::now()->subMonth();
-        $month = $previousMonth->month;
-        $year = $previousMonth->year;
+        $periodStart = Carbon::now()->subWeek()->startOfWeek(CarbonInterface::MONDAY);
+        $periodEnd = Carbon::now()->subWeek()->endOfWeek(CarbonInterface::SUNDAY);
+        $summaryType = ConversationSummaryType::ConversationCycle;
+        $triggerType = ConversationSummaryTriggerType::Weekly;
 
-        $existingSummary = $user->summaries()
-            ->where('month', $month)
-            ->where('year', $year)
+        $existingSummary = $user->conversationSummaries()
+            ->where('summary_type', $summaryType->value)
+            ->where('trigger_type', $triggerType->value)
+            ->where('period_start', $periodStart)
+            ->where('period_end', $periodEnd)
             ->first();
 
         if ($existingSummary) {
             return null;
         }
 
-        $startDate = $previousMonth->copy()->startOfMonth();
-        $endDate = $previousMonth->copy()->endOfMonth();
-
-        $mealStats = $this->mealService->getPeriodSummary($user, $startDate, $endDate);
+        $mealStats = $this->mealService->getPeriodSummary($user, $periodStart->copy(), $periodEnd->copy());
 
         if ($mealStats['total_meals'] === 0) {
             return null;
         }
 
-        $weightStats = $this->weightLogService->getPeriodWeights($user, $startDate, $endDate);
+        $weightStats = $this->weightLogService->getPeriodWeights($user, $periodStart->copy(), $periodEnd->copy());
 
         $stats = [
             'meals' => $mealStats,
             'weights' => $weightStats,
         ];
 
-        $statsFormatted = $this->formatStatsForAgent($mealStats, $weightStats, $previousMonth);
+        $statsFormatted = $this->formatCycleStatsForAgent($mealStats, $weightStats, $periodStart, $periodEnd);
 
         $response = agent(
-            instructions: 'Você é Morgan, um nutricionista virtual. Gere um resumo curto e motivador (máximo 3 parágrafos) sobre o mês do usuário com base nas estatísticas fornecidas. Mencione destaques, padrões e dê uma dica para o próximo mês. Responda em português do Brasil.',
+            instructions: 'Generate an internal nutrition summary in English for one completed conversation cycle. Use no more than 4 short paragraphs. Highlight patterns, difficulties, progress, and one light orientation for the next cycle. Do not address the user directly.',
         )->prompt($statsFormatted);
 
-        $summary = $user->summaries()->create([
-            'month' => $month,
-            'year' => $year,
+        $summary = $user->conversationSummaries()->create([
+            'summary_type' => $summaryType,
+            'trigger_type' => $triggerType,
+            'period_start' => $periodStart,
+            'period_end' => $periodEnd,
             'summary' => $response->text,
             'stats' => $stats,
         ]);
@@ -71,14 +75,18 @@ class SummaryService
     }
 
     /**
-     * @return Collection<int, Summary>
+     * @return Collection<int, UserConversationSummary>
      */
-    public function getRecentSummaries(User $user, int $months = 1): Collection
-    {
-        return $user->summaries()
-            ->orderByDesc('year')
-            ->orderByDesc('month')
-            ->limit($months)
+    public function getRecentConversationSummaries(
+        User $user,
+        int $limit = 1,
+        ConversationSummaryType $summaryType = ConversationSummaryType::ConversationCycle,
+    ): Collection {
+        return $user->conversationSummaries()
+            ->where('summary_type', $summaryType->value)
+            ->orderByDesc('period_end')
+            ->orderByDesc('period_start')
+            ->limit($limit)
             ->get();
     }
 
@@ -86,32 +94,34 @@ class SummaryService
      * @param  array{total_calories: int, avg_daily_calories: int, total_meals: int, total_items: int, days_tracked: int, top_items: array<int, array{description: string, count: int, avg_calories: int}>}  $mealStats
      * @param  array{start_weight: ?float, end_weight: ?float, min_weight: ?float, max_weight: ?float, entries: int}  $weightStats
      */
-    private function formatStatsForAgent(array $mealStats, array $weightStats, Carbon $month): string
-    {
-        $monthName = $month->translatedFormat('F Y');
-
+    private function formatCycleStatsForAgent(
+        array $mealStats,
+        array $weightStats,
+        Carbon $periodStart,
+        Carbon $periodEnd,
+    ): string {
         $lines = [
-            "Resumo de {$monthName}:",
-            "- Calorias totais: {$mealStats['total_calories']} kcal",
-            "- Média diária: {$mealStats['avg_daily_calories']} kcal",
-            "- Total de refeições: {$mealStats['total_meals']}",
-            "- Total de itens: {$mealStats['total_items']}",
-            "- Dias rastreados: {$mealStats['days_tracked']}",
+            "Conversation cycle from {$periodStart->toDateString()} to {$periodEnd->toDateString()}:",
+            "- Total calories: {$mealStats['total_calories']} kcal",
+            "- Daily average: {$mealStats['avg_daily_calories']} kcal",
+            "- Total meals: {$mealStats['total_meals']}",
+            "- Total items: {$mealStats['total_items']}",
+            "- Tracked days: {$mealStats['days_tracked']}",
         ];
 
         if (! empty($mealStats['top_items'])) {
-            $lines[] = '- Alimentos mais frequentes:';
+            $lines[] = '- Most frequent foods:';
             foreach ($mealStats['top_items'] as $item) {
                 $lines[] = "  - {$item['description']}: {$item['count']}x (~{$item['avg_calories']} kcal)";
             }
         }
 
         if ($weightStats['entries'] > 0) {
-            $lines[] = "- Peso inicial: {$weightStats['start_weight']} kg";
-            $lines[] = "- Peso final: {$weightStats['end_weight']} kg";
-            $lines[] = "- Peso mínimo: {$weightStats['min_weight']} kg";
-            $lines[] = "- Peso máximo: {$weightStats['max_weight']} kg";
-            $lines[] = "- Registros de peso: {$weightStats['entries']}";
+            $lines[] = "- Start weight: {$weightStats['start_weight']} kg";
+            $lines[] = "- End weight: {$weightStats['end_weight']} kg";
+            $lines[] = "- Minimum weight: {$weightStats['min_weight']} kg";
+            $lines[] = "- Maximum weight: {$weightStats['max_weight']} kg";
+            $lines[] = "- Weight entries: {$weightStats['entries']}";
         }
 
         return implode("\n", $lines);

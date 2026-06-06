@@ -152,9 +152,7 @@ class ChatController extends Controller
 
         $conversationId = $this->getCurrentMonthConversationId($user->id);
 
-        if (! $conversationId) {
-            $this->summaryService->generateIfNeeded($user);
-        }
+        $this->summaryService->generateConversationCycleSummaryIfNeeded($user);
 
         $promptArgs = [];
 

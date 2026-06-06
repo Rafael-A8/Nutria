@@ -3,8 +3,12 @@
 use App\Ai\Agents\NutritionistAgent;
 use App\Ai\Tools\RegisterMealTool;
 use App\Enums\AiModel;
+use App\Enums\ConversationSummaryTriggerType;
+use App\Enums\ConversationSummaryType;
+use App\Enums\UserMemoryCategory;
 use App\Models\User;
 use App\Models\UserMemory;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Laravel\Ai\Embeddings;
 
@@ -35,15 +39,15 @@ it('injects relevant user memories into the current prompt', function () {
 
     UserMemory::create([
         'user_id' => $user->id,
-        'category' => 'eating_behavior',
-        'content' => 'User struggles with binge eating',
+        'category' => UserMemoryCategory::Comportamento->value,
+        'content' => 'Usuária tem dificuldade com compulsão alimentar',
         'embedding' => $queryVector,
     ]);
 
     UserMemory::create([
         'user_id' => $otherUser->id,
-        'category' => 'food_preferences',
-        'content' => 'Other user likes chocolate cake',
+        'category' => UserMemoryCategory::Preferencias->value,
+        'content' => 'Outra usuária gosta de bolo de chocolate',
         'embedding' => $queryVector,
     ]);
 
@@ -60,11 +64,11 @@ it('injects relevant user memories into the current prompt', function () {
     expect($response->text)->toBe('Resposta contextualizada')
         ->and($processedPrompt)->toContain("I'm craving cake today")
         ->and($processedPrompt)->toContain('USER MEMORIES')
-        ->and($processedPrompt)->toContain('- [eating_behavior] User struggles with binge eating')
+        ->and($processedPrompt)->toContain('- [comportamento] Usuária tem dificuldade com compulsão alimentar')
         ->and($processedPrompt)->toContain('Use these memories naturally when relevant.')
         ->and($processedPrompt)->toContain('Never mention memory retrieval.')
         ->and($processedPrompt)->toContain('Never expose internal memory mechanisms.')
-        ->and($processedPrompt)->not->toContain('Other user likes chocolate cake');
+        ->and($processedPrompt)->not->toContain('Outra usuária gosta de bolo de chocolate');
 });
 
 it('continues normally when no relevant memories are found', function () {
@@ -74,8 +78,8 @@ it('continues normally when no relevant memories are found', function () {
 
     UserMemory::create([
         'user_id' => $user->id,
-        'category' => 'food_preferences',
-        'content' => 'User prefers savory breakfasts',
+        'category' => UserMemoryCategory::Preferencias->value,
+        'content' => 'Usuária prefere cafés da manhã salgados',
         'embedding' => embeddingVectorAt(1),
     ]);
 
@@ -105,16 +109,16 @@ it('limits injected memories and preserves conversation continuation history', f
     foreach (range(1, 5) as $index) {
         UserMemory::create([
             'user_id' => $user->id,
-            'category' => 'eating_behavior',
-            'content' => "Relevant memory {$index}",
+            'category' => UserMemoryCategory::Comportamento->value,
+            'content' => "Memória relevante {$index}",
             'embedding' => $queryVector,
         ]);
     }
 
     UserMemory::create([
         'user_id' => $otherUser->id,
-        'category' => 'eating_behavior',
-        'content' => 'Other user relevant memory',
+        'category' => UserMemoryCategory::Comportamento->value,
+        'content' => 'Memória relevante de outra usuária',
         'embedding' => $queryVector,
     ]);
 
@@ -150,14 +154,84 @@ it('limits injected memories and preserves conversation continuation history', f
 
     expect($secondResponse->conversationId)->toBe($firstResponse->conversationId)
         ->and($memoryPrompts)->toHaveCount(2)
-        ->and(substr_count($memoryPrompts[0], '- [eating_behavior]'))->toBe(4)
-        ->and(substr_count($memoryPrompts[1], '- [eating_behavior]'))->toBe(4)
-        ->and($memoryPrompts[0])->not->toContain('Other user relevant memory')
-        ->and($memoryPrompts[1])->not->toContain('Other user relevant memory')
+        ->and(substr_count($memoryPrompts[0], '- [comportamento]'))->toBe(4)
+        ->and(substr_count($memoryPrompts[1], '- [comportamento]'))->toBe(4)
+        ->and($memoryPrompts[0])->not->toContain('Memória relevante de outra usuária')
+        ->and($memoryPrompts[1])->not->toContain('Memória relevante de outra usuária')
         ->and($storedUserMessages)->toBe([
             'Estou com vontade de bolo hoje',
             'Ainda estou pensando em bolo',
         ]);
+});
+
+it('injects priority memories by category even when semantic search does not match them', function () {
+    Embeddings::fake(fn () => [embeddingVectorAt(0)]);
+
+    $user = User::factory()->create();
+
+    UserMemory::create([
+        'user_id' => $user->id,
+        'category' => UserMemoryCategory::Restricoes->value,
+        'content' => 'Usuária não pode consumir lactose',
+        'embedding' => embeddingVectorAt(1),
+    ]);
+
+    UserMemory::create([
+        'user_id' => $user->id,
+        'category' => UserMemoryCategory::Objetivos->value,
+        'content' => 'Usuária quer manter consistência semanal',
+        'embedding' => embeddingVectorAt(2),
+    ]);
+
+    UserMemory::create([
+        'user_id' => $user->id,
+        'category' => UserMemoryCategory::Preferencias->value,
+        'content' => 'Usuária gosta de refeições salgadas',
+        'embedding' => embeddingVectorAt(3),
+    ]);
+
+    $processedPrompt = '';
+
+    NutritionistAgent::fake(function (string $prompt) use (&$processedPrompt) {
+        $processedPrompt = $prompt;
+
+        return 'Resposta com memória prioritária';
+    });
+
+    $response = (new NutritionistAgent($user))->prompt('Quero organizar minha semana');
+
+    expect($response->text)->toBe('Resposta com memória prioritária')
+        ->and($processedPrompt)->toContain('- [restricoes] Usuária não pode consumir lactose')
+        ->and($processedPrompt)->toContain('- [objetivos] Usuária quer manter consistência semanal')
+        ->and($processedPrompt)->not->toContain('Usuária gosta de refeições salgadas');
+});
+
+it('deduplicates priority memories that also appear in semantic search', function () {
+    $queryVector = embeddingVectorAt(0);
+
+    Embeddings::fake(fn () => [$queryVector]);
+
+    $user = User::factory()->create();
+
+    UserMemory::create([
+        'user_id' => $user->id,
+        'category' => UserMemoryCategory::Restricoes->value,
+        'content' => 'Usuária não pode consumir glúten',
+        'embedding' => $queryVector,
+    ]);
+
+    $processedPrompt = '';
+
+    NutritionistAgent::fake(function (string $prompt) use (&$processedPrompt) {
+        $processedPrompt = $prompt;
+
+        return 'Resposta sem duplicidade';
+    });
+
+    $response = (new NutritionistAgent($user))->prompt('Quero opções sem glúten');
+
+    expect($response->text)->toBe('Resposta sem duplicidade')
+        ->and(substr_count($processedPrompt, 'Usuária não pode consumir glúten'))->toBe(1);
 });
 
 it('can continue the same conversation after switching from OpenAI to Gemini', function () {
@@ -245,6 +319,26 @@ it('instructs the agent to give specific nutritional feedback instead of generic
         ->and($instructions)->toContain('Always provide one concrete reading about the meal')
         ->and($instructions)->toContain('Ask one short, useful question rather than assuming too much')
         ->and($instructions)->toContain('plain text item lines returned by the tools');
+});
+
+it('injects the previous conversation cycle summary into the prompt', function () {
+    $user = User::factory()->create();
+
+    $user->conversationSummaries()->create([
+        'summary_type' => ConversationSummaryType::ConversationCycle,
+        'trigger_type' => ConversationSummaryTriggerType::Weekly,
+        'period_start' => Carbon::parse('2026-06-01 00:00:00'),
+        'period_end' => Carbon::parse('2026-06-07 23:59:59'),
+        'summary' => 'The user kept a steady lunch routine and struggled with late snacks.',
+        'stats' => [],
+    ]);
+
+    $instructions = (string) (new NutritionistAgent($user))->instructions();
+
+    expect($instructions)->toContain('Previous conversation cycle summary')
+        ->and($instructions)->toContain('### Cycle from 2026-06-01 to 2026-06-07')
+        ->and($instructions)->toContain('The user kept a steady lunch routine and struggled with late snacks.')
+        ->and($instructions)->not->toContain('Previous months summary');
 });
 
 it('guides meal registration with calories effectively consumed', function () {

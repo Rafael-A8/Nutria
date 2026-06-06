@@ -14,8 +14,8 @@ use App\Ai\Tools\RegisterWeightTool;
 use App\Ai\Tools\SaveMemoryTool;
 use App\Ai\Tools\UpdateProfileTool;
 use App\Enums\AiModel;
-use App\Models\Summary;
 use App\Models\User;
+use App\Models\UserConversationSummary;
 use App\Services\ChatMessageService;
 use App\Services\MealService;
 use App\Services\SummaryService;
@@ -49,7 +49,7 @@ class NutritionistAgent implements Agent, Conversational, HasMiddleware, HasTool
 
     private bool $weightResolved = false;
 
-    /** @var Collection<int, Summary>|null */
+    /** @var Collection<int, UserConversationSummary>|null */
     private ?Collection $cachedRecentSummaries = null;
 
     public function __construct(protected User $user) {}
@@ -136,7 +136,7 @@ class NutritionistAgent implements Agent, Conversational, HasMiddleware, HasTool
         META: CALORIC GOAL (Mifflin-St Jeor)
         Mandatory formula. INTERNAL USE ONLY.
         - Output ONLY final results: TMB, TDEE, and Daily Goal.
-        - Frame it as: "Preparei seu novo plano: TMB: {value} | TDEE: {value} | Meta: {value} kcal/dia."
+        - Frame it as: "Preparei seu novo plano: TMB: ... | TDEE: ...| Meta: ... kcal/dia."
 
         MEAL TOOLS FLOW
         - `parse_meal_message` BEFORE `estimate_meal`.
@@ -163,16 +163,17 @@ class NutritionistAgent implements Agent, Conversational, HasMiddleware, HasTool
         - Structure: 1. Warm Greeting/Status | 2. Nutritional Insight | 3. Motivational Closer.
         PROMPT;
 
-        $recentSummaries = $this->getRecentSummaries();
+        $recentSummaries = $this->getRecentConversationSummaries();
 
         if ($recentSummaries->isNotEmpty()) {
             $summaryContext = $recentSummaries->map(function ($summary) {
-                $monthName = Carbon::createFromDate($summary->year, $summary->month, 1)->translatedFormat('F Y');
+                $periodStart = $summary->period_start->toDateString();
+                $periodEnd = $summary->period_end->toDateString();
 
-                return "### {$monthName}\n{$summary->summary}";
+                return "### Cycle from {$periodStart} to {$periodEnd}\n{$summary->summary}";
             })->implode("\n\n");
 
-            $prompt .= "\n\nPrevious months summary (use for context, do not repeat to user unless asked):\n{$summaryContext}";
+            $prompt .= "\n\nPrevious conversation cycle summary (use for context, do not repeat to user unless asked):\n{$summaryContext}";
         }
 
         return $prompt;
@@ -197,15 +198,15 @@ class NutritionistAgent implements Agent, Conversational, HasMiddleware, HasTool
     }
 
     /**
-     * @return Collection<int, Summary>
+     * @return Collection<int, UserConversationSummary>
      */
-    private function getRecentSummaries(): Collection
+    private function getRecentConversationSummaries(): Collection
     {
         return $this->cachedRecentSummaries ??= (new SummaryService(
             new MealService,
             new WeightLogService,
             new ChatMessageService,
-        ))->getRecentSummaries($this->user, months: 1);
+        ))->getRecentConversationSummaries($this->user, limit: 1);
     }
 
     private function today(): string
