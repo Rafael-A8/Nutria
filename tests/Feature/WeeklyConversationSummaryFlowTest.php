@@ -167,13 +167,30 @@ it('validates the weekly conversation summary flow before production', function 
         expect($summary->stats['meals']['days_tracked'])->toBe(6)
             ->and($summary->stats['meals']['total_meals'])->toBe(15)
             ->and($summary->stats['meals']['total_calories'])->toBeGreaterThan(0)
-            ->and($summary->message_count)->toBeNull()
+            ->and($summary->stats['conversation'])->toBe([
+                'message_count' => 8,
+                'selected_message_count' => 8,
+            ])
+            ->and($summary->message_count)->toBe(8)
             ->and($summary->token_count)->toBeNull()
-            ->and($user->conversationSummaries()->count())->toBe(1);
+            ->and($user->conversationSummaries()->count())->toBe(1)
+            ->and($user->chatMessages()->count())->toBe(8);
 
         AnonymousAgent::assertPrompted(fn ($prompt): bool => str_contains(
             $prompt->prompt,
             'Conversation cycle from 2026-06-01 to 2026-06-07:'
+        ) && str_contains(
+            $prompt->prompt,
+            '- User conversation signals:'
+        ) && str_contains(
+            $prompt->prompt,
+            'Hoje fui em um aniversário'
+        ) && str_contains(
+            $prompt->prompt,
+            'Sai para beber com amigos'
+        ) && str_contains(
+            $prompt->prompt,
+            'Minha sogra veio em casa'
         ));
 
         $duplicateSummary = $summaryService->generateConversationCycleSummaryIfNeeded($user);

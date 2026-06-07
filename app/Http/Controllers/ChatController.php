@@ -10,7 +10,9 @@ use App\Models\ChatMessage;
 use App\Models\User;
 use App\Services\ChatMessageService;
 use App\Services\SummaryService;
+use Carbon\CarbonInterface;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
@@ -150,7 +152,7 @@ class ChatController extends Controller
     {
         $agent = new NutritionistAgent($user);
 
-        $conversationId = $this->getCurrentMonthConversationId($user->id);
+        $conversationId = $this->getCurrentConversationCycleId($user->id);
 
         $this->summaryService->generateConversationCycleSummaryIfNeeded($user);
 
@@ -174,12 +176,14 @@ class ChatController extends Controller
         ];
     }
 
-    private function getCurrentMonthConversationId(int $userId): ?string
+    private function getCurrentConversationCycleId(int $userId): ?string
     {
+        $cycleStart = now()->startOfWeek(CarbonInterface::MONDAY);
+        $cycleEnd = now()->endOfWeek(CarbonInterface::SUNDAY);
+
         return DB::table('agent_conversations')
             ->where('user_id', $userId)
-            ->whereMonth('created_at', now()->month)
-            ->whereYear('created_at', now()->year)
+            ->whereBetween('created_at', [$cycleStart, $cycleEnd])
             ->latest('updated_at')
             ->value('id');
     }

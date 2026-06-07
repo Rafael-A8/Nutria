@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\ChatMessage;
 use App\Models\User;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
 class ChatMessageService
@@ -36,6 +37,30 @@ class ChatMessageService
     {
         return $user->chatMessages()
             ->latest()
+            ->limit($limit)
+            ->get()
+            ->reverse()
+            ->values();
+    }
+
+    public function countUserMessagesForPeriod(User $user, Carbon $startDate, Carbon $endDate): int
+    {
+        return $user->chatMessages()
+            ->where('role', 'user')
+            ->whereBetween('created_at', [$startDate->copy(), $endDate->copy()])
+            ->count();
+    }
+
+    /**
+     * @return Collection<int, ChatMessage>
+     */
+    public function getUserMessagesForPeriod(User $user, Carbon $startDate, Carbon $endDate, int $limit = 40): Collection
+    {
+        return $user->chatMessages()
+            ->where('role', 'user')
+            ->whereBetween('created_at', [$startDate->copy(), $endDate->copy()])
+            ->latest('created_at')
+            ->latest('id')
             ->limit($limit)
             ->get()
             ->reverse()
