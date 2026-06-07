@@ -409,12 +409,12 @@ class MealEstimationService
 
     private function estimatedAssistantGuide(): string
     {
-        return 'Use user_facing_summary como base da explicação ao usuário, cite calculation_lines quando ajudar a transparência, mantenha assumptions visíveis se houve hipótese e então registre com items_for_registration sem recalcular.';
+        return 'Use user_facing_summary as the base for the user-facing explanation, cite calculation_lines when transparency helps, keep assumptions visible when assumptions were used, and then register with items_for_registration without recalculating. If calorie-dense ingredients have uncertain quantities, clearly state that the estimate may vary and do not present the total as exact.';
     }
 
     private function clarificationAssistantGuide(): string
     {
-        return 'Faça a clarification_question abaixo como sua próxima mensagem principal, explique o motivo em uma frase se ajudar e não chame register_meal até o usuário responder.';
+        return 'Ask clarification_question as your main next message, briefly explain the reason when useful, and do not call register_meal until the user answers.';
     }
 
     /**
@@ -430,8 +430,9 @@ class MealEstimationService
     private function lowConfidenceAssistantGuide(string $baseGuide): string
     {
         return $baseGuide
-            .' Os itens em low_confidence_items não têm base determinística. Estime calorias e gramagem usando seu conhecimento nutricional, '
-            .'adicione-os a items_for_registration na chamada de register_meal e avise o usuário que esses itens são estimativas aproximadas (⚠ baixa confiança).';
+            .' Items in low_confidence_items do not have deterministic database support. Estimate calories and grams using your nutrition knowledge, '
+            .'add them to items_for_registration in the register_meal call, and tell the user these items are approximate estimates (low confidence). '
+            .'For sweet, fried, or calorie-dense preparations, prefer a cautious range or highlight that the value may vary significantly.';
     }
 
     private function preparationRetentionFactor(): float

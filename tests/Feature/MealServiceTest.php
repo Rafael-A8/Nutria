@@ -142,6 +142,17 @@ it('gets week summary', function () {
     Carbon::setTestNow();
 });
 
+it('counts meals for a specific day', function () {
+    $otherUser = User::factory()->create();
+
+    $this->service->registerMeal($this->user, 'almoco', Carbon::parse('2026-06-06 12:00:00'));
+    $this->service->registerMeal($this->user, 'jantar', Carbon::parse('2026-06-06 20:00:00'));
+    $this->service->registerMeal($this->user, 'cafe_da_manha', Carbon::parse('2026-06-07 08:00:00'));
+    $this->service->registerMeal($otherUser, 'almoco', Carbon::parse('2026-06-06 12:30:00'));
+
+    expect($this->service->countMealsForDay($this->user, Carbon::parse('2026-06-06')))->toBe(2);
+});
+
 it('gets period summary', function () {
     Embeddings::fake();
 

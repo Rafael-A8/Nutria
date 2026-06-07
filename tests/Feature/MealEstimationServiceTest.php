@@ -24,6 +24,7 @@ it('estimates common foods deterministically from internal references', function
         ->and($result['total_calories'])->toBe(255)
         ->and($result['user_facing_summary'])->toContain('Estimativa do jantar pronta')
         ->and($result['assistant_response_guide'])->toContain('user_facing_summary')
+        ->and($result['assistant_response_guide'])->toContain('calorie-dense ingredients have uncertain quantities')
         ->and($result['calculation_lines'])->toHaveCount(2)
         ->and($result['items_for_registration'])->toHaveCount(2)
         ->and($result['items_for_registration'][0])->toMatchArray([
@@ -153,7 +154,8 @@ it('returns low confidence items for unknown foods instead of blocking the whole
         ->and($result['low_confidence_items'][0]['quantity_grams'])->toBe(300)
         ->and($result['low_confidence_items'][1]['description'])->toBe('baião de dois')
         ->and($result['user_facing_summary'])->toContain('estimativa do agente necessária')
-        ->and($result['assistant_response_guide'])->toContain('low_confidence_items');
+        ->and($result['assistant_response_guide'])->toContain('low_confidence_items')
+        ->and($result['assistant_response_guide'])->toContain('prefer a cautious range');
 });
 
 it('returns all items as low confidence when none match the reference table', function () {

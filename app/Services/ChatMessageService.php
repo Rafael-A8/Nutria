@@ -51,6 +51,21 @@ class ChatMessageService
             ->count();
     }
 
+    public function countUserMessagesForDay(User $user, Carbon $date): int
+    {
+        return $this->countUserMessagesForPeriod($user, $date->copy()->startOfDay(), $date->copy()->endOfDay());
+    }
+
+    public function getPreviousUserMessage(User $user): ?ChatMessage
+    {
+        return $user->chatMessages()
+            ->where('role', 'user')
+            ->latest('created_at')
+            ->latest('id')
+            ->skip(1)
+            ->first();
+    }
+
     /**
      * @return Collection<int, ChatMessage>
      */

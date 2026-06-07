@@ -8,6 +8,8 @@ use App\Enums\ConversationSummaryType;
 use App\Enums\UserMemoryCategory;
 use App\Models\User;
 use App\Models\UserMemory;
+use App\Services\ChatMessageService;
+use App\Services\MealService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Laravel\Ai\Embeddings;
@@ -64,8 +66,9 @@ it('injects relevant user memories into the current prompt', function () {
     expect($response->text)->toBe('Resposta contextualizada')
         ->and($processedPrompt)->toContain("I'm craving cake today")
         ->and($processedPrompt)->toContain('USER MEMORIES')
+        ->and($processedPrompt)->toContain('CONTEXTUAL PREFERENCES AND BEHAVIOR')
         ->and($processedPrompt)->toContain('- [comportamento] Usuária tem dificuldade com compulsão alimentar')
-        ->and($processedPrompt)->toContain('Use these memories naturally when relevant.')
+        ->and($processedPrompt)->toContain('Use [preferencias] and [comportamento] naturally only when relevant.')
         ->and($processedPrompt)->toContain('Never mention memory retrieval.')
         ->and($processedPrompt)->toContain('Never expose internal memory mechanisms.')
         ->and($processedPrompt)->not->toContain('Outra usuária gosta de bolo de chocolate');
@@ -201,9 +204,61 @@ it('injects priority memories by category even when semantic search does not mat
     $response = (new NutritionistAgent($user))->prompt('Quero organizar minha semana');
 
     expect($response->text)->toBe('Resposta com memória prioritária')
+        ->and($processedPrompt)->toContain('HARD SAFETY RESTRICTIONS')
+        ->and($processedPrompt)->toContain('ACTIVE GOALS')
         ->and($processedPrompt)->toContain('- [restricoes] Usuária não pode consumir lactose')
         ->and($processedPrompt)->toContain('- [objetivos] Usuária quer manter consistência semanal')
+        ->and($processedPrompt)->toContain('Treat [restricoes] as hard safety constraints.')
+        ->and($processedPrompt)->toContain('Treat [objetivos] as active guidance.')
+        ->and($processedPrompt)->toContain('Do not mention unrelated memories just because they are present.')
         ->and($processedPrompt)->not->toContain('Usuária gosta de refeições salgadas');
+});
+
+it('instructs the agent to connect relevant restrictions and goals without dumping unrelated memories', function () {
+    Embeddings::fake(fn () => [embeddingVectorAt(0)]);
+
+    $user = User::factory()->create();
+
+    UserMemory::create([
+        'user_id' => $user->id,
+        'category' => UserMemoryCategory::Restricoes->value,
+        'content' => 'Hercules tem intolerância à lactose.',
+        'embedding' => embeddingVectorAt(1),
+    ]);
+
+    UserMemory::create([
+        'user_id' => $user->id,
+        'category' => UserMemoryCategory::Restricoes->value,
+        'content' => 'Hercules não pode comer camarão.',
+        'embedding' => embeddingVectorAt(2),
+    ]);
+
+    UserMemory::create([
+        'user_id' => $user->id,
+        'category' => UserMemoryCategory::Objetivos->value,
+        'content' => 'Hercules deseja emagrecer sem fazer uma dieta muito restritiva.',
+        'embedding' => embeddingVectorAt(3),
+    ]);
+
+    $processedPrompt = '';
+
+    NutritionistAgent::fake(function (string $prompt) use (&$processedPrompt) {
+        $processedPrompt = $prompt;
+
+        return 'Resposta considerando restrições e objetivo';
+    });
+
+    $response = (new NutritionistAgent($user))->prompt('Comi canjica com doce de leite e fui no banheiro duas vezes.');
+
+    expect($response->text)->toBe('Resposta considerando restrições e objetivo')
+        ->and($processedPrompt)->toContain('HARD SAFETY RESTRICTIONS')
+        ->and($processedPrompt)->toContain('- [restricoes] Hercules tem intolerância à lactose.')
+        ->and($processedPrompt)->toContain('- [restricoes] Hercules não pode comer camarão.')
+        ->and($processedPrompt)->toContain('ACTIVE GOALS')
+        ->and($processedPrompt)->toContain('- [objetivos] Hercules deseja emagrecer sem fazer uma dieta muito restritiva.')
+        ->and($processedPrompt)->toContain('If the user\'s food, symptom, or requested advice may relate to a restriction, explicitly mention it and adapt the guidance.')
+        ->and($processedPrompt)->toContain('Use goals to shape recommendations, tradeoffs, and next steps.')
+        ->and($processedPrompt)->toContain('Do not mention unrelated memories just because they are present.');
 });
 
 it('deduplicates priority memories that also appear in semantic search', function () {
@@ -320,6 +375,82 @@ it('instructs the agent to give specific nutritional feedback instead of generic
         ->and($instructions)->toContain('Ask one short, useful question rather than assuming too much')
         ->and($instructions)->toContain('plain text item lines returned by the tools');
 });
+
+it('adds follow-up context and clinical rails to the agent instructions', function () {
+    $user = User::factory()->create();
+    $chatMessageService = new ChatMessageService;
+    $mealService = new MealService;
+
+    try {
+        Carbon::setTestNow(Carbon::parse('2026-06-06 20:00:00', config('app.timezone')));
+        $chatMessageService->storeUserMessage($user, 'Ontem acabei pulando o jantar e fiquei com fome tarde.');
+        $mealService->registerMeal($user, 'almoco', Carbon::parse('2026-06-06 12:30:00', config('app.timezone')));
+
+        Carbon::setTestNow(Carbon::parse('2026-06-07 09:00:00', config('app.timezone')));
+        $chatMessageService->storeUserMessage($user, 'Hoje quero retomar melhor.');
+
+        $instructions = (string) (new NutritionistAgent($user))->instructions();
+
+        expect($instructions)->toContain('FOLLOW-UP CONTEXT')
+            ->and($instructions)->toContain('Previous user interaction before current message: 2026-06-06 20:00:00 | "Ontem acabei pulando o jantar e fiquei com fome tarde."')
+            ->and($instructions)->toContain('Days since previous user interaction: 1')
+            ->and($instructions)->toContain('Absence context: No meaningful absence to acknowledge.')
+            ->and($instructions)->toContain('Yesterday (2026-06-06) user chat messages: 1')
+            ->and($instructions)->toContain('Yesterday meal records: 1')
+            ->and($instructions)->toContain('RELATIONSHIP CONTINUITY RAILS')
+            ->and($instructions)->toContain('CLINICAL COACHING RAILS')
+            ->and($instructions)->toContain('If the user reports symptoms after eating and a known restriction may relate to the food')
+            ->and($instructions)->toContain('avoid confident low estimates')
+            ->and($instructions)->toContain('Use absence context as a continuity signal');
+    } finally {
+        Carbon::setTestNow();
+    }
+});
+
+it('exposes multi-day gaps since the previous user interaction', function () {
+    $user = User::factory()->create();
+    $chatMessageService = new ChatMessageService;
+
+    try {
+        Carbon::setTestNow(Carbon::parse('2026-06-03 20:00:00', config('app.timezone')));
+        $chatMessageService->storeUserMessage($user, 'Passei uns dias sem registrar direito.');
+
+        Carbon::setTestNow(Carbon::parse('2026-06-07 09:00:00', config('app.timezone')));
+        $chatMessageService->storeUserMessage($user, 'Voltei hoje para organizar minha alimentação.');
+
+        $instructions = (string) (new NutritionistAgent($user))->instructions();
+
+        expect($instructions)->toContain('Previous user interaction before current message: 2026-06-03 20:00:00 | "Passei uns dias sem registrar direito."')
+            ->and($instructions)->toContain('Days since previous user interaction: 4')
+            ->and($instructions)->toContain('Absence context: User has been away for 4 days.')
+            ->and($instructions)->toContain('gently acknowledge it once in PT-BR with a warm check-in');
+    } finally {
+        Carbon::setTestNow();
+    }
+});
+
+it('humanizes longer absence contexts for the agent', function (string $previousInteractionDate, string $expectedAbsenceContext) {
+    $user = User::factory()->create();
+    $chatMessageService = new ChatMessageService;
+
+    try {
+        Carbon::setTestNow(Carbon::parse($previousInteractionDate, config('app.timezone')));
+        $chatMessageService->storeUserMessage($user, 'Estou voltando depois de um tempo fora.');
+
+        Carbon::setTestNow(Carbon::parse('2026-06-07 09:00:00', config('app.timezone')));
+        $chatMessageService->storeUserMessage($user, 'Quero retomar meu acompanhamento.');
+
+        $instructions = (string) (new NutritionistAgent($user))->instructions();
+
+        expect($instructions)->toContain("Absence context: {$expectedAbsenceContext}");
+    } finally {
+        Carbon::setTestNow();
+    }
+})->with([
+    'one week away' => ['2026-05-31 20:00:00', 'User has been away for about 1 week (7 days).'],
+    'two months away' => ['2026-04-04 20:00:00', 'User has been away for about 2 months (64 days).'],
+    'one year away' => ['2025-06-07 20:00:00', 'User has been away for about 1 year (365 days).'],
+]);
 
 it('injects the previous conversation cycle summary into the prompt', function () {
     $user = User::factory()->create();

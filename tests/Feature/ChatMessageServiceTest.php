@@ -2,6 +2,7 @@
 
 use App\Models\User;
 use App\Services\ChatMessageService;
+use Illuminate\Support\Carbon;
 
 beforeEach(function () {
     $this->user = User::factory()->create();
@@ -102,4 +103,38 @@ it('stores a user message with images and no text', function () {
     expect($message)
         ->image_paths->toHaveCount(1)
         ->audio_path->toBeNull();
+});
+
+it('gets the previous user message before the current stored message', function () {
+    try {
+        Carbon::setTestNow(Carbon::parse('2026-06-06 19:00:00'));
+        $this->service->storeUserMessage($this->user, 'Ontem tive um jantar pesado.');
+        $this->service->storeAssistantMessage($this->user, 'Me conta mais sobre esse jantar.');
+
+        Carbon::setTestNow(Carbon::parse('2026-06-07 09:00:00'));
+        $this->service->storeUserMessage($this->user, 'Hoje voltei para registrar o café.');
+
+        $previousMessage = $this->service->getPreviousUserMessage($this->user);
+
+        expect($previousMessage)
+            ->not->toBeNull()
+            ->content->toBe('Ontem tive um jantar pesado.');
+    } finally {
+        Carbon::setTestNow();
+    }
+});
+
+it('counts only user messages for a specific day', function () {
+    try {
+        Carbon::setTestNow(Carbon::parse('2026-06-06 08:00:00'));
+        $this->service->storeUserMessage($this->user, 'Mensagem de ontem.');
+        $this->service->storeAssistantMessage($this->user, 'Resposta de ontem.');
+
+        Carbon::setTestNow(Carbon::parse('2026-06-07 08:00:00'));
+        $this->service->storeUserMessage($this->user, 'Mensagem de hoje.');
+
+        expect($this->service->countUserMessagesForDay($this->user, Carbon::parse('2026-06-06')))->toBe(1);
+    } finally {
+        Carbon::setTestNow();
+    }
 });

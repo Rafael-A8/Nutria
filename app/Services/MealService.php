@@ -95,6 +95,13 @@ class MealService
         ];
     }
 
+    public function countMealsForDay(User $user, Carbon $date): int
+    {
+        return $user->meals()
+            ->whereBetween('consumed_at', [$date->copy()->startOfDay(), $date->copy()->endOfDay()])
+            ->count();
+    }
+
     /**
      * @return array<string, int>
      */
