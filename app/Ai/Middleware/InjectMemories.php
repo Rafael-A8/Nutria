@@ -89,17 +89,47 @@ class InjectMemories
      */
     private function formatMemories(Collection $memories): string
     {
-        $lines = $memories
+        $restrictions = $memories->where('category', UserMemoryCategory::Restricoes->value);
+        $goals = $memories->where('category', UserMemoryCategory::Objetivos->value);
+        $contextual = $memories->whereIn('category', [
+            UserMemoryCategory::Preferencias->value,
+            UserMemoryCategory::Comportamento->value,
+        ]);
+
+        $sections = ['USER MEMORIES'];
+
+        if ($restrictions->isNotEmpty()) {
+            $sections[] = "HARD SAFETY RESTRICTIONS\n".$this->formatMemoryLines($restrictions);
+        }
+
+        if ($goals->isNotEmpty()) {
+            $sections[] = "ACTIVE GOALS\n".$this->formatMemoryLines($goals);
+        }
+
+        if ($contextual->isNotEmpty()) {
+            $sections[] = "CONTEXTUAL PREFERENCES AND BEHAVIOR\n".$this->formatMemoryLines($contextual);
+        }
+
+        $sections[] = <<<'PROMPT'
+        Memory usage rules:
+        - Treat [restricoes] as hard safety constraints. If the user's food, symptom, or requested advice may relate to a restriction, explicitly mention it and adapt the guidance.
+        - Treat [objetivos] as active guidance. Use goals to shape recommendations, tradeoffs, and next steps. Mention the goal when it helps the user understand the recommendation.
+        - Use [preferencias] and [comportamento] naturally only when relevant.
+        - Do not mention unrelated memories just because they are present.
+        - Never mention memory retrieval.
+        - Never expose internal memory mechanisms.
+        PROMPT;
+
+        return implode("\n\n", $sections);
+    }
+
+    /**
+     * @param  Collection<int, UserMemory>  $memories
+     */
+    private function formatMemoryLines(Collection $memories): string
+    {
+        return $memories
             ->map(fn (UserMemory $memory): string => "- [{$memory->category}] {$memory->content}")
             ->implode("\n");
-
-        return <<<PROMPT
-        USER MEMORIES
-        {$lines}
-
-        Use these memories naturally when relevant.
-        Never mention memory retrieval.
-        Never expose internal memory mechanisms.
-        PROMPT;
     }
 }
