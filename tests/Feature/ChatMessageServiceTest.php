@@ -124,6 +124,30 @@ it('gets the previous user message before the current stored message', function 
     }
 });
 
+it('gets the latest user message before a given date', function () {
+    try {
+        Carbon::setTestNow(Carbon::parse('2026-06-05 19:00:00'));
+        $this->service->storeUserMessage($this->user, 'Mensagem antiga.');
+
+        Carbon::setTestNow(Carbon::parse('2026-06-06 21:00:00'));
+        $this->service->storeUserMessage($this->user, 'Última mensagem antes de hoje.');
+
+        Carbon::setTestNow(Carbon::parse('2026-06-07 09:00:00'));
+        $this->service->storeUserMessage($this->user, 'Mensagem de hoje.');
+
+        $previousDayMessage = $this->service->getLatestUserMessageBefore(
+            $this->user,
+            Carbon::parse('2026-06-07 00:00:00'),
+        );
+
+        expect($previousDayMessage)
+            ->not->toBeNull()
+            ->content->toBe('Última mensagem antes de hoje.');
+    } finally {
+        Carbon::setTestNow();
+    }
+});
+
 it('counts only user messages for a specific day', function () {
     try {
         Carbon::setTestNow(Carbon::parse('2026-06-06 08:00:00'));

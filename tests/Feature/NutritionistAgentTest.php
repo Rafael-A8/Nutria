@@ -11,6 +11,7 @@ use App\Models\UserMemory;
 use App\Services\ChatMessageService;
 use App\Services\MealService;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Laravel\Ai\Embeddings;
 
@@ -393,15 +394,15 @@ it('adds follow-up context and clinical rails to the agent instructions', functi
 
         expect($instructions)->toContain('FOLLOW-UP CONTEXT')
             ->and($instructions)->toContain('Previous user interaction before current message: 2026-06-06 20:00:00 | "Ontem acabei pulando o jantar e fiquei com fome tarde."')
-            ->and($instructions)->toContain('Days since previous user interaction: 1')
-            ->and($instructions)->toContain('Absence context: No meaningful absence to acknowledge.')
+            ->and($instructions)->toContain('Days since last user interaction before today: 1')
+            ->and($instructions)->toContain('Absence context: none')
             ->and($instructions)->toContain('Yesterday (2026-06-06) user chat messages: 1')
             ->and($instructions)->toContain('Yesterday meal records: 1')
             ->and($instructions)->toContain('RELATIONSHIP CONTINUITY RAILS')
             ->and($instructions)->toContain('CLINICAL COACHING RAILS')
             ->and($instructions)->toContain('If the user reports symptoms after eating and a known restriction may relate to the food')
             ->and($instructions)->toContain('avoid confident low estimates')
-            ->and($instructions)->toContain('Use absence context as a continuity signal');
+            ->and($instructions)->toContain('If absence context is `none`, do not mention absence');
     } finally {
         Carbon::setTestNow();
     }
@@ -421,9 +422,44 @@ it('exposes multi-day gaps since the previous user interaction', function () {
         $instructions = (string) (new NutritionistAgent($user))->instructions();
 
         expect($instructions)->toContain('Previous user interaction before current message: 2026-06-03 20:00:00 | "Passei uns dias sem registrar direito."')
-            ->and($instructions)->toContain('Days since previous user interaction: 4')
+            ->and($instructions)->toContain('Days since last user interaction before today: 4')
             ->and($instructions)->toContain('Absence context: User has been away for 4 days.')
             ->and($instructions)->toContain('gently acknowledge it once in PT-BR with a warm check-in');
+    } finally {
+        Carbon::setTestNow();
+    }
+});
+
+it('caches daily absence context while keeping the previous message fresh', function () {
+    $user = User::factory()->create();
+    $chatMessageService = new ChatMessageService;
+
+    try {
+        Carbon::setTestNow(Carbon::parse('2026-06-03 20:00:00', config('app.timezone')));
+        $chatMessageService->storeUserMessage($user, 'Último contato antes de sumir.');
+
+        Carbon::setTestNow(Carbon::parse('2026-06-07 09:00:00', config('app.timezone')));
+        $chatMessageService->storeUserMessage($user, 'Voltei hoje pela manhã.');
+
+        $firstInstructions = (string) (new NutritionistAgent($user))->instructions();
+        $cacheKey = "nutritionist-agent:daily-follow-up-context:user:{$user->id}:2026-06-07";
+
+        expect($firstInstructions)->toContain('Previous user interaction before current message: 2026-06-03 20:00:00 | "Último contato antes de sumir."')
+            ->and($firstInstructions)->toContain('Absence context: User has been away for 4 days.')
+            ->and($firstInstructions)->toContain('Yesterday (2026-06-06) user chat messages: 0')
+            ->and(Cache::has($cacheKey))->toBeTrue();
+
+        Carbon::setTestNow(Carbon::parse('2026-06-06 18:00:00', config('app.timezone')));
+        $chatMessageService->storeUserMessage($user, 'Mensagem inserida depois do cache.');
+
+        Carbon::setTestNow(Carbon::parse('2026-06-07 10:00:00', config('app.timezone')));
+        $chatMessageService->storeUserMessage($user, 'Segunda mensagem de hoje.');
+
+        $secondInstructions = (string) (new NutritionistAgent($user))->instructions();
+
+        expect($secondInstructions)->toContain('Previous user interaction before current message: 2026-06-07 09:00:00 | "Voltei hoje pela manhã."')
+            ->and($secondInstructions)->toContain('Absence context: User has been away for 4 days.')
+            ->and($secondInstructions)->toContain('Yesterday (2026-06-06) user chat messages: 0');
     } finally {
         Carbon::setTestNow();
     }

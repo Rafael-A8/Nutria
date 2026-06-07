@@ -66,6 +66,16 @@ class ChatMessageService
             ->first();
     }
 
+    public function getLatestUserMessageBefore(User $user, Carbon $date): ?ChatMessage
+    {
+        return $user->chatMessages()
+            ->where('role', 'user')
+            ->where('created_at', '<', $date->copy())
+            ->latest('created_at')
+            ->latest('id')
+            ->first();
+    }
+
     /**
      * @return Collection<int, ChatMessage>
      */

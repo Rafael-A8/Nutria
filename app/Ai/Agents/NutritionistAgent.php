@@ -22,6 +22,7 @@ use App\Services\SummaryService;
 use App\Services\WeightLogService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 use Laravel\Ai\Attributes\MaxSteps;
 use Laravel\Ai\Concerns\RemembersConversations;
@@ -103,7 +104,7 @@ class NutritionistAgent implements Agent, Conversational, HasMiddleware, HasTool
 
         USER DATA: Name: {$name} | Gender: {$gender} | Age/DOB: {$birthDate} | Height: {$heightCm} | Weight: {$weightText} | Goal: {$goal} | Activity: {$activityLevel}
         TODAY CONTEXT ({$this->today()}): {$todayCalories} kcal consumed in {$todayMealCount} meal(s).
-        FOLLOW-UP CONTEXT: Previous user interaction before current message: {$followUpContext['previous_user_message']} | Days since previous user interaction: {$followUpContext['days_since_previous_user_interaction']} | Absence context: {$followUpContext['absence_context']} | Yesterday ({$followUpContext['yesterday_date']}) user chat messages: {$followUpContext['yesterday_user_message_count']} | Yesterday meal records: {$followUpContext['yesterday_meal_count']}.
+        FOLLOW-UP CONTEXT: Previous user interaction before current message: {$followUpContext['previous_user_message']} | Days since last user interaction before today: {$followUpContext['days_since_previous_user_interaction']} | Absence context: {$followUpContext['absence_context']} | Yesterday ({$followUpContext['yesterday_date']}) user chat messages: {$followUpContext['yesterday_user_message_count']} | Yesterday meal records: {$followUpContext['yesterday_meal_count']}.
         PROMPT;
 
         if (! $profileComplete || $weightText === 'not provided') {
@@ -160,7 +161,9 @@ class NutritionistAgent implements Agent, Conversational, HasMiddleware, HasTool
         - Show "X/Y kcal (Z%)" when relevant and close with a motivational message.
 
         RELATIONSHIP CONTINUITY RAILS
-        - Use absence context as a continuity signal, not a scolding cue.
+        - Use absence context only when it is not `none`.
+        - If absence context is `none`, do not mention absence, missed days, or inactivity.
+        - When absence context is present, treat it as a continuity signal, not a scolding cue.
         - If absence context says the user has been away for days, weeks, months, or years, gently acknowledge it once in PT-BR with a warm check-in and invite the user to talk about what happened.
         - If the user is actively registering food, handle the registration first and use at most one short follow-up sentence about the absence.
 
@@ -237,39 +240,64 @@ class NutritionistAgent implements Agent, Conversational, HasMiddleware, HasTool
         $chatMessageService = new ChatMessageService;
         $mealService = new MealService;
         $now = Carbon::now();
-        $yesterday = $now->copy()->subDay();
         $previousUserMessage = $chatMessageService->getPreviousUserMessage($this->user);
-        $timezone = (string) config('app.timezone');
-        $daysSincePreviousUserInteraction = null;
+        $dailyContext = $this->getDailyFollowUpContext($chatMessageService, $mealService, $now);
 
-        if ($previousUserMessage?->created_at) {
-            $daysSincePreviousUserInteraction = (int) $previousUserMessage->created_at
-                ->copy()
-                ->timezone($timezone)
-                ->startOfDay()
-                ->diffInDays($now->copy()->timezone($timezone)->startOfDay());
-        }
-
-        return $this->cachedFollowUpContext = [
+        return $this->cachedFollowUpContext = array_merge([
             'previous_user_message' => $previousUserMessage
                 ? $previousUserMessage->created_at->toDateTimeString().' | "'.Str::of($previousUserMessage->content)->squish()->limit(180, preserveWords: true)->toString().'"'
                 : 'none recorded',
-            'days_since_previous_user_interaction' => $daysSincePreviousUserInteraction === null ? 'not available' : (string) $daysSincePreviousUserInteraction,
-            'absence_context' => $this->formatAbsenceContext($daysSincePreviousUserInteraction),
-            'yesterday_date' => $yesterday->toDateString(),
-            'yesterday_user_message_count' => $chatMessageService->countUserMessagesForDay($this->user, $yesterday->copy()),
-            'yesterday_meal_count' => $mealService->countMealsForDay($this->user, $yesterday->copy()),
-        ];
+        ], $dailyContext);
+    }
+
+    /**
+     * @return array{days_since_previous_user_interaction: string, absence_context: string, yesterday_date: string, yesterday_user_message_count: int, yesterday_meal_count: int}
+     */
+    private function getDailyFollowUpContext(ChatMessageService $chatMessageService, MealService $mealService, Carbon $now): array
+    {
+        $timezone = (string) config('app.timezone');
+        $today = $now->copy()->timezone($timezone)->startOfDay();
+
+        return Cache::remember(
+            $this->dailyFollowUpCacheKey($today),
+            $today->copy()->endOfDay(),
+            function () use ($chatMessageService, $mealService, $today): array {
+                $yesterday = $today->copy()->subDay();
+                $lastUserMessageBeforeToday = $chatMessageService->getLatestUserMessageBefore($this->user, $today);
+                $daysSincePreviousUserInteraction = null;
+
+                if ($lastUserMessageBeforeToday?->created_at) {
+                    $daysSincePreviousUserInteraction = (int) $lastUserMessageBeforeToday->created_at
+                        ->copy()
+                        ->timezone($today->getTimezone())
+                        ->startOfDay()
+                        ->diffInDays($today->copy());
+                }
+
+                return [
+                    'days_since_previous_user_interaction' => $daysSincePreviousUserInteraction === null ? 'not available' : (string) $daysSincePreviousUserInteraction,
+                    'absence_context' => $this->formatAbsenceContext($daysSincePreviousUserInteraction),
+                    'yesterday_date' => $yesterday->toDateString(),
+                    'yesterday_user_message_count' => $chatMessageService->countUserMessagesForDay($this->user, $yesterday->copy()),
+                    'yesterday_meal_count' => $mealService->countMealsForDay($this->user, $yesterday->copy()),
+                ];
+            },
+        );
+    }
+
+    private function dailyFollowUpCacheKey(Carbon $today): string
+    {
+        return "nutritionist-agent:daily-follow-up-context:user:{$this->user->id}:{$today->toDateString()}";
     }
 
     private function formatAbsenceContext(?int $daysSincePreviousUserInteraction): string
     {
         if ($daysSincePreviousUserInteraction === null) {
-            return 'No previous interaction available. Do not mention an absence.';
+            return 'none';
         }
 
         if ($daysSincePreviousUserInteraction <= 1) {
-            return 'No meaningful absence to acknowledge.';
+            return 'none';
         }
 
         if ($daysSincePreviousUserInteraction < 7) {
