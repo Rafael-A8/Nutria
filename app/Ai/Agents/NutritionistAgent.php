@@ -29,13 +29,15 @@ use Laravel\Ai\Concerns\RemembersConversations;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Contracts\HasMiddleware;
+use Laravel\Ai\Contracts\HasProviderOptions;
 use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Promptable;
 use Stringable;
 
 #[MaxSteps(8)]
-class NutritionistAgent implements Agent, Conversational, HasMiddleware, HasTools
+class NutritionistAgent implements Agent, Conversational, HasMiddleware, HasProviderOptions, HasTools
 {
     use Promptable, RemembersConversations;
 
@@ -65,6 +67,24 @@ class NutritionistAgent implements Agent, Conversational, HasMiddleware, HasTool
         $model = AiModel::tryFrom($preferred ?? '') ?? AiModel::default();
 
         return $model->providerChain();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function providerOptions(Lab|string $provider): array
+    {
+        $providerName = $provider instanceof Lab ? $provider->value : $provider;
+
+        if ($providerName !== Lab::Gemini->value) {
+            return [];
+        }
+
+        return [
+            'thinkingConfig' => [
+                'thinkingLevel' => 'medium',
+            ],
+        ];
     }
 
     /**
@@ -147,11 +167,15 @@ class NutritionistAgent implements Agent, Conversational, HasMiddleware, HasTool
 
         MEAL TOOLS FLOW
         - `parse_meal_message` BEFORE `estimate_meal`.
-        - `parse_meal_message` returns `items_text` as plain text lines. Copy it directly into `estimate_meal` without converting to JSON.
+        - `parse_meal_message` returns `items_text`, `meal_type`, and `consumed_at`. Copy them directly into `estimate_meal` without converting to JSON.
         - Use `get_similar_items` with one description per line.
         - When a dish is prepared (e.g., salad, plated dish), report the total weight of the assembled dish without splitting per item.
         - `estimate_meal` is the single source of truth for calories.
-        - `estimate_meal` returns `items_for_registration_text`. Copy that text directly into `register_meal` without converting to JSON.
+        - `estimate_meal` may use structured fallback estimation for foods outside the internal database. Do not estimate calories yourself.
+        - Register only when `estimate_meal` returns `registration_allowed=true`.
+        - `estimate_meal` returns `items_for_registration_text`, `consumed_at`, `expected_items_count`, and `pending_items_count`. Copy all four directly into `register_meal` without converting to JSON.
+        - If `estimate_meal` returns `clarification_required` or `registration_allowed=false`, ask the suggested clarification and do not call `register_meal`.
+        - If `register_meal` returns `registration_blocked`, do not say the meal was registered. Explain briefly that one detail still needs confirmation.
 
         COACHING & REGISTRATION
         - Classify meals as: cafe_da_manha, almoco, lanche, jantar, sobremesa, outro.
@@ -170,7 +194,7 @@ class NutritionistAgent implements Agent, Conversational, HasMiddleware, HasTool
         CLINICAL COACHING RAILS
         - If the user reports symptoms after eating and a known restriction may relate to the food, explicitly connect the symptom and restriction in a calm, non-alarming way. Do not diagnose. Suggest practical next steps such as hydration, observation, and seeking professional care if symptoms are severe or persistent.
         - If calorie-dense ingredients are present and quantities are uncertain (e.g., condensed milk, dulce de leche, coconut, oils, cream, cheese, nuts, fried foods, sauces, desserts), avoid confident low estimates. Prefer a cautious range or clearly state the estimate is uncertain.
-        - When using `estimate_meal`, do not recalculate deterministic items. If the tool reports low-confidence items or assumptions, surface the uncertainty in the user response and avoid presenting the total as exact.
+        - When using `estimate_meal`, do not recalculate deterministic items. If the tool reports fallback assumptions, surface the uncertainty in the user response and avoid presenting the total as exact.
 
         OUTPUT FORMAT
         - Language: PT-BR only.

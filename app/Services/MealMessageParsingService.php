@@ -98,7 +98,7 @@ class MealMessageParsingService
     }
 
     /**
-     * @return list<array{description: string, quantity_grams: int|null, quantity_text: string|null, context: string|null, _offset: int}>
+     * @return list<array{description: string, quantity_grams: int|null, quantity_text: string|null, context: string|null, _offset: int, _length: int}>
      */
     private function detectItems(string $normalizedMessage): array
     {
@@ -107,7 +107,7 @@ class MealMessageParsingService
         foreach ($this->references() as $reference) {
             $aliasMatch = $this->findBestAliasMatch($normalizedMessage, $reference['aliases']);
 
-            if ($aliasMatch === null) {
+            if ($aliasMatch === null || $this->isNegatedAlias($normalizedMessage, $aliasMatch['offset'])) {
                 continue;
             }
 
@@ -126,13 +126,30 @@ class MealMessageParsingService
                 'quantity_text' => $quantity['quantity_text'],
                 'context' => $context,
                 '_offset' => $aliasMatch['offset'],
+                '_length' => strlen($aliasMatch['normalized_alias']),
             ];
         }
 
-        return collect($matches)
+        $selectedItems = [];
+
+        foreach ($this->sortMatchesByPositionAndSpecificity($matches) as $match) {
+            $start = $match['_offset'];
+            $end = $start + $match['_length'];
+            $overlapsSelectedItem = collect($selectedItems)
+                ->contains(fn (array $selected): bool => $start < $selected['_end'] && $end > $selected['_offset']);
+
+            if ($overlapsSelectedItem) {
+                continue;
+            }
+
+            $match['_end'] = $end;
+            $selectedItems[] = $match;
+        }
+
+        return collect($selectedItems)
             ->sortBy('_offset')
             ->values()
-            ->map(fn (array $item) => collect($item)->except('_offset')->all())
+            ->map(fn (array $item) => collect($item)->except(['_offset', '_length', '_end'])->all())
             ->all();
     }
 
@@ -170,6 +187,24 @@ class MealMessageParsingService
     private function extractQuantity(string $normalizedMessage, string $normalizedAlias, bool $isCookingFat): array
     {
         $escapedAlias = preg_quote($normalizedAlias, '/');
+        $containerMatch = $this->firstRegexMatch($normalizedMessage, [
+            "/(?P<count>\d+(?:[\.,]\d+)?)\s*(?P<container>lata(?:s)?|latao|latoes)\s+(?:de\s+)?{$escapedAlias}[^\d]{0,20}(?P<volume>\d+(?:[\.,]\d+)?)\s*ml/",
+            "/{$escapedAlias}[^\d]{0,20}(?P<count>\d+(?:[\.,]\d+)?)\s*(?P<container>lata(?:s)?|latao|latoes)[^\d]{0,20}(?P<volume>\d+(?:[\.,]\d+)?)\s*ml/",
+        ]);
+
+        if ($containerMatch !== null) {
+            $count = (float) str_replace(',', '.', $containerMatch['count']);
+            $volume = (float) str_replace(',', '.', $containerMatch['volume']);
+            $container = str_starts_with($containerMatch['container'], 'latao') || $containerMatch['container'] === 'latoes'
+                ? 'latões'
+                : 'latas';
+
+            return [
+                'quantity_grams' => (int) round($count * $volume),
+                'quantity_text' => trim("{$containerMatch['count']} {$container} de {$containerMatch['volume']}ml"),
+            ];
+        }
+
         $measurementMatch = $this->firstRegexMatch($normalizedMessage, [
             "/(?P<value>\d+(?:[\.,]\d+)?)\s*(?P<unit>kg|g|ml)\s*(?:de\s+)?{$escapedAlias}/",
             "/{$escapedAlias}\s*[,;-]?\s*(?P<value>\d+(?:[\.,]\d+)?)\s*(?P<unit>kg|g|ml)/",
@@ -197,6 +232,18 @@ class MealMessageParsingService
             return [
                 'quantity_grams' => null,
                 'quantity_text' => $quantityText,
+            ];
+        }
+
+        $unitlessCountMatch = $this->firstRegexMatch($normalizedMessage, [
+            "/(?P<value>\d+(?:[\.,]\d+)?)\s+{$escapedAlias}\b/",
+            "/{$escapedAlias}\s*[,;-]?\s*(?P<value>\d+(?:[\.,]\d+)?)\b/",
+        ]);
+
+        if ($unitlessCountMatch !== null) {
+            return [
+                'quantity_grams' => null,
+                'quantity_text' => trim("{$unitlessCountMatch['value']} unidades"),
             ];
         }
 
@@ -256,6 +303,27 @@ class MealMessageParsingService
         }
 
         return null;
+    }
+
+    /**
+     * @param  list<array{description: string, quantity_grams: int|null, quantity_text: string|null, context: string|null, _offset: int, _length: int}>  $matches
+     * @return list<array{description: string, quantity_grams: int|null, quantity_text: string|null, context: string|null, _offset: int, _length: int}>
+     */
+    private function sortMatchesByPositionAndSpecificity(array $matches): array
+    {
+        usort($matches, function (array $first, array $second): int {
+            return $first['_offset'] <=> $second['_offset']
+                ?: $second['_length'] <=> $first['_length'];
+        });
+
+        return $matches;
+    }
+
+    private function isNegatedAlias(string $normalizedMessage, int $offset): bool
+    {
+        $prefix = substr($normalizedMessage, max(0, $offset - 8), 8);
+
+        return preg_match('/\bsem\s+$/', $prefix) === 1;
     }
 
     private function detectCompositeMealTotalGrams(string $normalizedMessage): ?int
@@ -320,11 +388,11 @@ class MealMessageParsingService
     }
 
     /**
-     * @return array<string, array{aliases: list<string>, calories_per_100g?: int, default_grams: int, default_calories?: int, is_cooking_fat?: bool}>
+     * @return array<string, array{aliases: list<string>, calories_per_100g?: int, default_grams: int, default_calories?: int, is_cooking_fat?: bool, source?: string, confidence?: string, high_variation?: bool, variation_note?: string}>
      */
     private function references(): array
     {
-        /** @var array<string, array{aliases: list<string>, calories_per_100g?: int, default_grams: int, default_calories?: int, is_cooking_fat?: bool}> $references */
+        /** @var array<string, array{aliases: list<string>, calories_per_100g?: int, default_grams: int, default_calories?: int, is_cooking_fat?: bool, source?: string, confidence?: string, high_variation?: bool, variation_note?: string}> $references */
         $references = config('nutrition.estimation.references', []);
 
         return $references;

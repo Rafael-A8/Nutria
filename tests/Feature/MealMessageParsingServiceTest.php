@@ -23,6 +23,50 @@ it('parses free-text meal items with quantities and preparation context', functi
         ]);
 });
 
+it('parses barbecue items and beer cans without dropping relevant foods', function () {
+    $service = new MealMessageParsingService;
+
+    $result = $service->parse('almoço foi churrasco. 250g de contra file, 1 linguiça cofril, 4 asas de frango, feijão tropeiro um prato medio, e 4 latas de amistel 473ml');
+
+    expect($result['status'])->toBe('parsed')
+        ->and($result['items'])->toHaveCount(5)
+        ->and($result['items'])->sequence(
+            fn ($item) => $item->toMatchArray(['description' => 'contra file', 'quantity_grams' => 250]),
+            fn ($item) => $item->toMatchArray(['description' => 'linguica', 'quantity_text' => '1 unidades']),
+            fn ($item) => $item->toMatchArray(['description' => 'asas de frango', 'quantity_text' => '4 unidades']),
+            fn ($item) => $item->toMatchArray(['description' => 'feijao tropeiro']),
+            fn ($item) => $item->toMatchArray(['description' => 'amistel', 'quantity_grams' => 1892, 'quantity_text' => '4 latas de 473ml']),
+        );
+});
+
+it('parses beer tall cans with volume', function () {
+    $service = new MealMessageParsingService;
+
+    $result = $service->parse('tomei 9 latões de Amistel 473ml', 'jantar');
+
+    expect($result['status'])->toBe('parsed')
+        ->and($result['items'])->toHaveCount(1)
+        ->and($result['items'][0])->toMatchArray([
+            'description' => 'amistel',
+            'quantity_grams' => 4257,
+            'quantity_text' => '9 latões de 473ml',
+        ]);
+});
+
+it('prefers specific overlapping items and ignores negated sugar', function () {
+    $service = new MealMessageParsingService;
+
+    $result = $service->parse('um misto de pão de forma com queijo e presunto e café sem açúcar');
+
+    expect($result['status'])->toBe('parsed')
+        ->and(collect($result['items'])->pluck('description')->all())->toBe([
+            'pao de forma',
+            'queijo',
+            'presunto',
+            'cafe sem acucar',
+        ]);
+});
+
 it('asks for clarification when a composite meal has only a total weight', function () {
     $service = new MealMessageParsingService;
 

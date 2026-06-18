@@ -31,9 +31,13 @@ return [
                 'default_grams' => 40,
             ],
             'tapioca' => [
-                'aliases' => ['tapioca', 'goma de tapioca'],
+                'aliases' => ['tapioca', 'goma de tapioca', 'beiju'],
                 'calories_per_100g' => 360,
                 'default_grams' => 30,
+                'source' => 'app_estimate',
+                'confidence' => 'medium',
+                'high_variation' => true,
+                'variation_note' => 'tapioca muda bastante conforme tipo da goma, hidratação, tamanho do disco e recheio.',
             ],
             'cuscuz de milho' => [
                 'aliases' => ['cuscuz', 'cuscuz de milho'],
@@ -47,6 +51,15 @@ return [
             ],
 
             // ── Leguminosas ─────────────────────────────────────────
+            'feijão tropeiro' => [
+                'aliases' => ['feijao tropeiro', 'feijão tropeiro'],
+                'calories_per_100g' => 152,
+                'default_grams' => 150,
+                'source' => 'taco',
+                'confidence' => 'medium',
+                'high_variation' => true,
+                'variation_note' => 'feijão tropeiro pode variar muito conforme farinha, óleo, bacon, linguiça e ovo.',
+            ],
             'feijão carioca cozido' => [
                 'aliases' => ['feijao', 'feijão', 'feijao carioca', 'feijão carioca'],
                 'calories_per_100g' => 77,
@@ -69,10 +82,38 @@ return [
             ],
 
             // ── Carnes e ovos ───────────────────────────────────────
+            'contra filé grelhado' => [
+                'aliases' => ['contra file', 'contra filé', 'contra-file', 'contrafile', 'contrafilé'],
+                'calories_per_100g' => 250,
+                'default_grams' => 150,
+            ],
+            'picanha sem gordura grelhada' => [
+                'aliases' => ['picanha', 'picanha grelhada', 'picanha sem gordura'],
+                'calories_per_100g' => 238,
+                'default_grams' => 150,
+                'source' => 'taco',
+                'confidence' => 'medium',
+                'high_variation' => true,
+                'variation_note' => 'picanha pode subir bastante quando consumida com capa de gordura.',
+            ],
+            'costela bovina assada' => [
+                'aliases' => ['costela', 'costela bovina', 'costela assada'],
+                'calories_per_100g' => 373,
+                'default_grams' => 150,
+                'source' => 'taco',
+                'confidence' => 'medium',
+                'high_variation' => true,
+                'variation_note' => 'costela tem grande variação por osso, gordura aparente e método de preparo.',
+            ],
             'peito de frango grelhado' => [
                 'aliases' => ['peito de frango', 'frango grelhado'],
                 'calories_per_100g' => 165,
                 'default_grams' => 120,
+            ],
+            'asa de frango assada' => [
+                'aliases' => ['asa de frango', 'asas de frango', 'asinha', 'asinhas'],
+                'calories_per_100g' => 290,
+                'default_grams' => 50,
             ],
             'coxa/sobrecoxa de frango cozida' => [
                 'aliases' => ['frango assado', 'frango sem pele', 'coxa de frango', 'sobrecoxa de frango'],
@@ -128,6 +169,11 @@ return [
             ],
 
             // ── Tubérculos e raízes ─────────────────────────────────
+            'batata frita' => [
+                'aliases' => ['batata frita', 'batatas fritas', 'fritas'],
+                'calories_per_100g' => 312,
+                'default_grams' => 100,
+            ],
             'batata inglesa cozida' => [
                 'aliases' => ['batata', 'batata inglesa', 'batata cozida'],
                 'calories_per_100g' => 52,
@@ -177,8 +223,17 @@ return [
             ],
 
             // ── Farinhas e farofas ──────────────────────────────────
+            'farofa temperada' => [
+                'aliases' => ['farofa', 'farofa temperada', 'farofa pronta'],
+                'calories_per_100g' => 406,
+                'default_grams' => 30,
+                'source' => 'taco',
+                'confidence' => 'medium',
+                'high_variation' => true,
+                'variation_note' => 'farofa varia conforme óleo, manteiga, bacon, linguiça, ovos e outros complementos.',
+            ],
             'farinha de mandioca' => [
-                'aliases' => ['farinha', 'farinha de mandioca', 'farofa'],
+                'aliases' => ['farinha', 'farinha de mandioca'],
                 'calories_per_100g' => 360,
                 'default_grams' => 20,
             ],
@@ -292,9 +347,13 @@ return [
                 'default_grams' => 80,
             ],
             'açaí' => [
-                'aliases' => ['acai', 'açaí'],
+                'aliases' => ['acai', 'açaí', 'polpa de acai', 'polpa de açaí'],
                 'calories_per_100g' => 58,
                 'default_grams' => 200,
+                'source' => 'taco',
+                'confidence' => 'medium',
+                'high_variation' => true,
+                'variation_note' => 'este valor representa polpa pura; açaí adoçado, creme, granola, leite em pó e leite condensado mudam muito o total.',
             ],
 
             // ── Laticínios ──────────────────────────────────────────
@@ -319,7 +378,7 @@ return [
                 'default_grams' => 120,
             ],
             'queijo mussarela' => [
-                'aliases' => ['mussarela', 'muçarela', 'queijo mussarela'],
+                'aliases' => ['queijo', 'mussarela', 'muçarela', 'queijo mussarela'],
                 'calories_per_100g' => 280,
                 'default_grams' => 30,
             ],
@@ -337,6 +396,27 @@ return [
                 'aliases' => ['cream cheese'],
                 'calories_per_100g' => 342,
                 'default_grams' => 20,
+            ],
+            'leite condensado' => [
+                'aliases' => ['leite condensado', 'leite condesado'],
+                'calories_per_100g' => 313,
+                'default_grams' => 20,
+                'source' => 'taco',
+                'confidence' => 'high',
+            ],
+            'doce de leite' => [
+                'aliases' => ['doce de leite', 'doce leite'],
+                'calories_per_100g' => 306,
+                'default_grams' => 20,
+                'source' => 'taco',
+                'confidence' => 'high',
+            ],
+            'creme de leite' => [
+                'aliases' => ['creme de leite'],
+                'calories_per_100g' => 221,
+                'default_grams' => 15,
+                'source' => 'taco',
+                'confidence' => 'high',
             ],
 
             // ── Gorduras e óleos ────────────────────────────────────
@@ -366,8 +446,13 @@ return [
             ],
 
             // ── Bebidas ─────────────────────────────────────────────
+            'café sem açúcar' => [
+                'aliases' => ['cafe', 'café', 'cafezinho', 'cafe sem acucar', 'café sem açúcar'],
+                'default_grams' => 50,
+                'default_calories' => 2,
+            ],
             'café com açúcar' => [
-                'aliases' => ['cafe', 'café', 'cafezinho'],
+                'aliases' => ['cafe com acucar', 'café com açúcar', 'cafezinho com acucar', 'cafezinho com açúcar'],
                 'default_grams' => 50,
                 'default_calories' => 30,
             ],
@@ -382,7 +467,7 @@ return [
                 'default_grams' => 350,
             ],
             'cerveja' => [
-                'aliases' => ['cerveja'],
+                'aliases' => ['cerveja', 'amstel', 'amistel'],
                 'calories_per_100g' => 43,
                 'default_grams' => 350,
             ],
@@ -437,6 +522,15 @@ return [
                 'default_grams' => 25,
                 'default_calories' => 90,
             ],
+            'canjica com leite integral' => [
+                'aliases' => ['canjica', 'canjica doce', 'canjica com leite'],
+                'calories_per_100g' => 112,
+                'default_grams' => 200,
+                'source' => 'taco',
+                'confidence' => 'medium',
+                'high_variation' => true,
+                'variation_note' => 'canjica doce pode subir bastante com leite condensado, doce de leite, açúcar, coco e creme de leite.',
+            ],
             'pudim' => [
                 'aliases' => ['pudim'],
                 'default_grams' => 100,
@@ -461,6 +555,15 @@ return [
                 'aliases' => ['biscoito', 'bolacha', 'biscoito cream cracker', 'bolacha cream cracker'],
                 'calories_per_100g' => 443,
                 'default_grams' => 30,
+            ],
+            'coco ralado' => [
+                'aliases' => ['coco ralado', 'coco', 'coco fresco'],
+                'calories_per_100g' => 406,
+                'default_grams' => 15,
+                'source' => 'taco',
+                'confidence' => 'medium',
+                'high_variation' => true,
+                'variation_note' => 'coco seco adoçado pode ser mais calórico do que coco fresco.',
             ],
 
             // ── Oleaginosas ─────────────────────────────────────────

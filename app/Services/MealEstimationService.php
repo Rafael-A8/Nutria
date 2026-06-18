@@ -4,7 +4,12 @@ namespace App\Services;
 
 use App\Models\MealItem;
 use App\Models\User;
+use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Throwable;
+
+use function Laravel\Ai\agent;
 
 class MealEstimationService
 {
@@ -95,15 +100,47 @@ class MealEstimationService
             $totalCalories += $estimate['calories'];
         }
 
+        if ($lowConfidenceItems !== []) {
+            $fallbackResult = $this->estimateLowConfidenceItemsWithAi($mealType, $lowConfidenceItems);
+
+            if ($fallbackResult['unresolved_items'] !== []) {
+                return [
+                    'status' => 'clarification_required',
+                    'meal_type' => $mealType,
+                    'next_step' => 'ask_for_clarification',
+                    'items_for_registration' => [],
+                    'estimated_items' => [],
+                    'low_confidence_items' => $fallbackResult['unresolved_items'],
+                    'total_calories' => null,
+                    'assumptions' => [],
+                    'calculation_lines' => [],
+                    'user_facing_summary' => $this->buildClarificationSummary($fallbackResult['clarification_question']),
+                    'assistant_response_guide' => $this->clarificationAssistantGuide(),
+                    'clarification_question' => $fallbackResult['clarification_question'],
+                    'clarification_reason' => $fallbackResult['clarification_reason'],
+                ];
+            }
+
+            foreach ($fallbackResult['estimated_items'] as $estimate) {
+                $itemsForRegistration[] = [
+                    'description' => $estimate['description'],
+                    'quantity_grams' => $estimate['quantity_grams'],
+                    'calories' => $estimate['calories'],
+                ];
+
+                $estimatedItems[] = $estimate;
+                $allAssumptions = [...$allAssumptions, ...$estimate['assumptions']];
+                $calculationLines[] = $estimate['calculation_line'];
+                $totalCalories += $estimate['calories'];
+            }
+
+            $lowConfidenceItems = [];
+        }
+
         $assumptions = array_values(array_unique($allAssumptions));
 
         $summary = $this->buildEstimatedSummary($mealType, $estimatedItems, $totalCalories, $assumptions);
         $guide = $this->estimatedAssistantGuide();
-
-        if ($lowConfidenceItems !== []) {
-            $summary .= ' '.$this->buildLowConfidenceSummary($lowConfidenceItems);
-            $guide = $this->lowConfidenceAssistantGuide($guide);
-        }
 
         return [
             'status' => 'estimated',
@@ -193,7 +230,7 @@ class MealEstimationService
     }
 
     /**
-     * @param  array{aliases: list<string>, calories_per_100g?: int, default_grams: int, default_calories?: int, is_cooking_fat?: bool}  $reference
+     * @param  array{aliases: list<string>, calories_per_100g?: int, default_grams: int, default_calories?: int, is_cooking_fat?: bool, source?: string, confidence?: string, high_variation?: bool, variation_note?: string}  $reference
      * @return array{status: 'estimated', original_description: string, description: string, quantity_grams: int, calories: int, source: string, assumptions: list<string>, calculation_line: string}
      */
     private function estimatePreparationFat(string $originalDescription, int $resolvedQuantityGrams, array $reference): array
@@ -218,7 +255,7 @@ class MealEstimationService
     }
 
     /**
-     * @param  array{aliases: list<string>, calories_per_100g?: int, default_grams: int, default_calories?: int, is_cooking_fat?: bool}|null  $reference
+     * @param  array{aliases: list<string>, calories_per_100g?: int, default_grams: int, default_calories?: int, is_cooking_fat?: bool, source?: string, confidence?: string, high_variation?: bool, variation_note?: string}|null  $reference
      * @return array{status: 'estimated', original_description: string, description: string, quantity_grams: int|null, calories: int, source: string, assumptions: list<string>, calculation_line: string}
      */
     private function estimateFromHistory(string $originalDescription, ?int $resolvedQuantityGrams, MealItem $historyMatch, ?array $reference): array
@@ -253,7 +290,7 @@ class MealEstimationService
     }
 
     /**
-     * @param  array{aliases: list<string>, calories_per_100g?: int, default_grams: int, default_calories?: int, is_cooking_fat?: bool}  $reference
+     * @param  array{aliases: list<string>, calories_per_100g?: int, default_grams: int, default_calories?: int, is_cooking_fat?: bool, source?: string, confidence?: string, high_variation?: bool, variation_note?: string}  $reference
      * @return array{status: 'estimated', original_description: string, description: string, quantity_grams: int, calories: int, source: string, assumptions: list<string>, calculation_line: string}
      */
     private function estimateFromReference(string $originalDescription, ?int $resolvedQuantityGrams, array $reference): array
@@ -269,6 +306,13 @@ class MealEstimationService
             $assumptions[] = "Porção padrão assumida para {$originalDescription}: {$quantityGrams}g.";
         }
 
+        if (($reference['high_variation'] ?? false) === true) {
+            $variationNote = $this->cleanOptionalText($reference['variation_note'] ?? null)
+                ?? 'o valor pode variar bastante conforme preparo, marca e complementos.';
+
+            $assumptions[] = "{$originalDescription} tem alta variação: {$variationNote}";
+        }
+
         return [
             'status' => 'estimated',
             'original_description' => $originalDescription,
@@ -282,7 +326,7 @@ class MealEstimationService
     }
 
     /**
-     * @param  array{aliases: list<string>, calories_per_100g?: int, default_grams: int, default_calories?: int, is_cooking_fat?: bool}  $reference
+     * @param  array{aliases: list<string>, calories_per_100g?: int, default_grams: int, default_calories?: int, is_cooking_fat?: bool, source?: string, confidence?: string, high_variation?: bool, variation_note?: string}  $reference
      */
     private function caloriesFromReference(array $reference, int $quantityGrams): int
     {
@@ -294,7 +338,7 @@ class MealEstimationService
     }
 
     /**
-     * @param  array{aliases: list<string>, calories_per_100g?: int, default_grams: int, default_calories?: int, is_cooking_fat?: bool}|null  $reference
+     * @param  array{aliases: list<string>, calories_per_100g?: int, default_grams: int, default_calories?: int, is_cooking_fat?: bool, source?: string, confidence?: string, high_variation?: bool, variation_note?: string}|null  $reference
      */
     private function resolveQuantityGrams(
         string $description,
@@ -323,7 +367,7 @@ class MealEstimationService
     }
 
     /**
-     * @param  array{aliases: list<string>, calories_per_100g?: int, default_grams: int, default_calories?: int, is_cooking_fat?: bool}|null  $reference
+     * @param  array{aliases: list<string>, calories_per_100g?: int, default_grams: int, default_calories?: int, is_cooking_fat?: bool, source?: string, confidence?: string, high_variation?: bool, variation_note?: string}|null  $reference
      */
     private function parseQuantityText(string $quantityText, ?array $reference): ?int
     {
@@ -364,19 +408,31 @@ class MealEstimationService
     }
 
     /**
-     * @return array{aliases: list<string>, calories_per_100g?: int, default_grams: int, default_calories?: int, is_cooking_fat?: bool}|null
+     * @return array{aliases: list<string>, calories_per_100g?: int, default_grams: int, default_calories?: int, is_cooking_fat?: bool, source?: string, confidence?: string, high_variation?: bool, variation_note?: string}|null
      */
     private function referenceFor(string $description): ?array
     {
         $normalizedDescription = $this->normalize($description);
+        $bestReference = null;
+        $bestAliasLength = 0;
 
         foreach ($this->references() as $reference) {
-            if (collect($reference['aliases'])->contains(fn (string $alias) => str_contains($normalizedDescription, $this->normalize($alias)))) {
-                return $reference;
+            foreach ($reference['aliases'] as $alias) {
+                $normalizedAlias = $this->normalize($alias);
+                $aliasLength = strlen($normalizedAlias);
+
+                if ($normalizedAlias === '' || $aliasLength <= $bestAliasLength) {
+                    continue;
+                }
+
+                if (str_contains($normalizedDescription, $normalizedAlias)) {
+                    $bestReference = $reference;
+                    $bestAliasLength = $aliasLength;
+                }
             }
         }
 
-        return null;
+        return $bestReference;
     }
 
     /**
@@ -407,6 +463,173 @@ class MealEstimationService
         return "Antes de registrar essa refeição, preciso confirmar um detalhe para estimar com segurança: {$clarificationQuestion}";
     }
 
+    /**
+     * @param  list<array{description: string, quantity_grams: int|null, quantity_text: string|null}>  $items
+     * @return array{
+     *     estimated_items: list<array{original_description: string, description: string, quantity_grams: int|null, calories: int, source: string, assumptions: list<string>, calculation_line: string}>,
+     *     unresolved_items: list<array{description: string, quantity_grams: int|null, quantity_text: string|null}>,
+     *     clarification_question: string,
+     *     clarification_reason: string
+     * }
+     */
+    private function estimateLowConfidenceItemsWithAi(string $mealType, array $items): array
+    {
+        try {
+            $response = agent(
+                instructions: $this->lowConfidenceEstimatorInstructions(),
+                schema: fn (JsonSchema $schema): array => $this->lowConfidenceEstimatorSchema($schema),
+            )->prompt(
+                $this->lowConfidenceEstimatorPrompt($mealType, $items),
+                provider: 'openai',
+                model: 'gpt-4o-mini',
+                timeout: 30,
+            );
+
+            /** @var array<string, mixed> $structured */
+            $structured = $response->structured ?? [];
+
+            return $this->normalizeLowConfidenceEstimates($items, $structured);
+        } catch (Throwable $exception) {
+            Log::warning('Low confidence meal estimation failed.', [
+                'exception' => $exception::class,
+                'message' => $exception->getMessage(),
+                'items' => $items,
+            ]);
+
+            return [
+                'estimated_items' => [],
+                'unresolved_items' => $items,
+                'clarification_question' => $this->clarificationQuestionForUnresolvedItems($items),
+                'clarification_reason' => 'Structured nutrition fallback estimation failed.',
+            ];
+        }
+    }
+
+    private function lowConfidenceEstimatorInstructions(): string
+    {
+        return <<<'PROMPT'
+        You estimate nutrition values for food items that were not found in the deterministic internal database.
+        Return structured data only. Do not register meals.
+        Estimate only when the item and portion are specific enough for a responsible rough estimate.
+        Prefer cautious, realistic calories for Brazilian foods and common portions.
+        If the quantity is too vague for a useful estimate, mark can_estimate=false and provide one short clarification question in PT-BR.
+        Assumptions and calculation_line may be in PT-BR because they can be shown to the final user.
+        PROMPT;
+    }
+
+    /**
+     * @param  list<array{description: string, quantity_grams: int|null, quantity_text: string|null}>  $items
+     */
+    private function lowConfidenceEstimatorPrompt(string $mealType, array $items): string
+    {
+        $itemsJson = json_encode($items, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+
+        return <<<PROMPT
+        Meal type: {$mealType}
+        Items needing fallback estimation:
+        {$itemsJson}
+
+        Return one output object per input item, preserving original_description.
+        PROMPT;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function lowConfidenceEstimatorSchema(JsonSchema $schema): array
+    {
+        return [
+            'items' => $schema->array()
+                ->items($schema->object([
+                    'original_description' => $schema->string()->required(),
+                    'can_estimate' => $schema->boolean()->required(),
+                    'description' => $schema->string()->required(),
+                    'quantity_grams' => $schema->integer()->nullable()->required(),
+                    'calories' => $schema->integer()->nullable()->required(),
+                    'confidence' => $schema->string()->enum(['low', 'medium'])->required(),
+                    'assumptions' => $schema->array()->items($schema->string())->required(),
+                    'calculation_line' => $schema->string()->required(),
+                    'clarification_question' => $schema->string()->nullable()->required(),
+                    'clarification_reason' => $schema->string()->nullable()->required(),
+                ])->withoutAdditionalProperties())
+                ->required(),
+        ];
+    }
+
+    /**
+     * @param  list<array{description: string, quantity_grams: int|null, quantity_text: string|null}>  $originalItems
+     * @param  array<string, mixed>  $structured
+     * @return array{
+     *     estimated_items: list<array{original_description: string, description: string, quantity_grams: int|null, calories: int, source: string, assumptions: list<string>, calculation_line: string}>,
+     *     unresolved_items: list<array{description: string, quantity_grams: int|null, quantity_text: string|null}>,
+     *     clarification_question: string,
+     *     clarification_reason: string
+     * }
+     */
+    private function normalizeLowConfidenceEstimates(array $originalItems, array $structured): array
+    {
+        $estimatedItems = [];
+        $unresolvedItems = [];
+        $clarificationQuestions = [];
+        $clarificationReasons = [];
+
+        $resultsList = collect($structured['items'] ?? [])
+            ->filter(fn (mixed $item): bool => is_array($item))
+            ->values();
+        $results = $resultsList
+            ->keyBy(fn (array $item): string => $this->normalize($item['original_description'] ?? $item['description'] ?? ''));
+
+        foreach ($originalItems as $index => $item) {
+            $result = $results->get($this->normalize($item['description'])) ?? $resultsList->get($index);
+
+            if (! is_array($result) || ($result['can_estimate'] ?? false) !== true || $this->nullablePositiveInt($result['calories'] ?? null) === null) {
+                $unresolvedItems[] = $item;
+                $clarificationQuestions[] = $this->cleanOptionalText($result['clarification_question'] ?? null);
+                $clarificationReasons[] = $this->cleanOptionalText($result['clarification_reason'] ?? null);
+
+                continue;
+            }
+
+            $calories = $this->nullablePositiveInt($result['calories']) ?? 0;
+            $quantityGrams = $this->nullablePositiveInt($result['quantity_grams'] ?? null) ?? $item['quantity_grams'];
+            $description = $this->cleanOptionalText($result['description'] ?? null) ?? $item['description'];
+            $assumptions = $this->normalizeStringList($result['assumptions'] ?? []);
+            $calculationLine = $this->cleanOptionalText($result['calculation_line'] ?? null)
+                ?? "{$description}: fallback estimate = ~{$calories} kcal.";
+
+            $assumptions[] = "Estimativa aproximada por fallback de IA para {$item['description']}.";
+
+            $estimatedItems[] = [
+                'original_description' => $item['description'],
+                'description' => $description,
+                'quantity_grams' => $quantityGrams,
+                'calories' => $calories,
+                'source' => 'ai_structured_fallback',
+                'assumptions' => array_values(array_unique($assumptions)),
+                'calculation_line' => $calculationLine,
+            ];
+        }
+
+        return [
+            'estimated_items' => $estimatedItems,
+            'unresolved_items' => $unresolvedItems,
+            'clarification_question' => collect($clarificationQuestions)->filter()->first()
+                ?? $this->clarificationQuestionForUnresolvedItems($unresolvedItems),
+            'clarification_reason' => collect($clarificationReasons)->filter()->first()
+                ?? 'Some extracted items could not be estimated responsibly.',
+        ];
+    }
+
+    /**
+     * @param  list<array{description: string, quantity_grams: int|null, quantity_text: string|null}>  $items
+     */
+    private function clarificationQuestionForUnresolvedItems(array $items): string
+    {
+        $itemNames = collect($items)->pluck('description')->filter()->implode(', ');
+
+        return "Qual foi aproximadamente a porção de {$itemNames}? Se for industrializado, me diga também a marca.";
+    }
+
     private function estimatedAssistantGuide(): string
     {
         return 'Use user_facing_summary as the base for the user-facing explanation, cite calculation_lines when transparency helps, keep assumptions visible when assumptions were used, and then register with items_for_registration without recalculating. If calorie-dense ingredients have uncertain quantities, clearly state that the estimate may vary and do not present the total as exact.';
@@ -417,35 +640,17 @@ class MealEstimationService
         return 'Ask clarification_question as your main next message, briefly explain the reason when useful, and do not call register_meal until the user answers.';
     }
 
-    /**
-     * @param  list<array{description: string, quantity_grams: int|null, quantity_text: string|null}>  $lowConfidenceItems
-     */
-    private function buildLowConfidenceSummary(array $lowConfidenceItems): string
-    {
-        $itemNames = collect($lowConfidenceItems)->pluck('description')->implode(', ');
-
-        return "Itens fora da base interna (estimativa do agente necessária): {$itemNames}.";
-    }
-
-    private function lowConfidenceAssistantGuide(string $baseGuide): string
-    {
-        return $baseGuide
-            .' Items in low_confidence_items do not have deterministic database support. Estimate calories and grams using your nutrition knowledge, '
-            .'add them to items_for_registration in the register_meal call, and tell the user these items are approximate estimates (low confidence). '
-            .'For sweet, fried, or calorie-dense preparations, prefer a cautious range or highlight that the value may vary significantly.';
-    }
-
     private function preparationRetentionFactor(): float
     {
         return (float) config('nutrition.estimation.preparation_retention_factor', 0.30);
     }
 
     /**
-     * @return array<string, array{aliases: list<string>, calories_per_100g?: int, default_grams: int, default_calories?: int, is_cooking_fat?: bool}>
+     * @return array<string, array{aliases: list<string>, calories_per_100g?: int, default_grams: int, default_calories?: int, is_cooking_fat?: bool, source?: string, confidence?: string, high_variation?: bool, variation_note?: string}>
      */
     private function references(): array
     {
-        /** @var array<string, array{aliases: list<string>, calories_per_100g?: int, default_grams: int, default_calories?: int, is_cooking_fat?: bool}> $references */
+        /** @var array<string, array{aliases: list<string>, calories_per_100g?: int, default_grams: int, default_calories?: int, is_cooking_fat?: bool, source?: string, confidence?: string, high_variation?: bool, variation_note?: string}> $references */
         $references = config('nutrition.estimation.references', []);
 
         return $references;
@@ -479,6 +684,33 @@ class MealEstimationService
         $trimmedValue = trim($value);
 
         return $trimmedValue === '' ? null : $trimmedValue;
+    }
+
+    private function nullablePositiveInt(mixed $value): ?int
+    {
+        if ($value === null || $value === '' || ! is_numeric($value)) {
+            return null;
+        }
+
+        $value = (int) round((float) $value);
+
+        return $value > 0 ? $value : null;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function normalizeStringList(mixed $values): array
+    {
+        if (! is_array($values)) {
+            return [];
+        }
+
+        return collect($values)
+            ->map(fn (mixed $value): ?string => $this->cleanOptionalText(is_scalar($value) ? (string) $value : null))
+            ->filter()
+            ->values()
+            ->all();
     }
 
     private function extractLeadingNumber(string $text): ?float

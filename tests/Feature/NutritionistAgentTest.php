@@ -14,6 +14,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Laravel\Ai\Embeddings;
+use Laravel\Ai\Enums\Lab;
 
 it('can be faked and responds to prompts', function () {
     NutritionistAgent::fake(['Olá! Como posso ajudar?']);
@@ -329,7 +330,14 @@ it('can continue the same conversation after switching from OpenAI to Gemini', f
 
     $geminiAgent = new NutritionistAgent($user);
 
-    expect($geminiAgent->provider())->toBe(AiModel::Gemini->providerChain());
+    expect($geminiAgent->provider())->toBe(AiModel::Gemini->providerChain())
+        ->and($geminiAgent->provider())->toHaveKey(Lab::Gemini->value, 'gemini-3.5-flash')
+        ->and($geminiAgent->providerOptions(Lab::Gemini))->toBe([
+            'thinkingConfig' => [
+                'thinkingLevel' => 'medium',
+            ],
+        ])
+        ->and($geminiAgent->providerOptions(Lab::OpenAI))->toBe([]);
 
     $secondResponse = $geminiAgent
         ->continue($firstResponse->conversationId, as: $user)
@@ -358,9 +366,11 @@ it('delegates preparation ingredient handling to the estimation flow', function 
     $instructions = (string) (new NutritionistAgent($user))->instructions();
 
     expect($instructions)->toContain('`parse_meal_message` BEFORE `estimate_meal`')
-        ->and($instructions)->toContain('returns `items_text` as plain text lines')
+        ->and($instructions)->toContain('returns `items_text`, `meal_type`, and `consumed_at`')
         ->and($instructions)->toContain('`estimate_meal` is the single source of truth for calories')
-        ->and($instructions)->toContain('`estimate_meal` returns `items_for_registration_text`')
+        ->and($instructions)->toContain('Register only when `estimate_meal` returns `registration_allowed=true`')
+        ->and($instructions)->toContain('`estimate_meal` returns `items_for_registration_text`, `consumed_at`, `expected_items_count`, and `pending_items_count`')
+        ->and($instructions)->toContain('If `register_meal` returns `registration_blocked`, do not say the meal was registered')
         ->and($instructions)->toContain('Use `context` in `estimate_meal` when there is preparation or indirect consumption')
         ->and($instructions)->toContain('The nutritional database for `estimate_meal` is configured in the application')
         ->and($instructions)->not->toContain('Arroz branco cozido: ~128 kcal/100g');
@@ -513,7 +523,8 @@ it('guides meal registration with calories effectively consumed', function () {
     $tool = new RegisterMealTool($user);
 
     expect((string) $tool->description())->toContain('plain text item lines')
-        ->and((string) $tool->description())->toContain('calories actually consumed');
+        ->and((string) $tool->description())->toContain('pass consumed_at, expected_items_count, and pending_items_count unchanged')
+        ->and((string) $tool->description())->toContain('registration_blocked');
 });
 
 /**

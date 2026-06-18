@@ -1,20 +1,23 @@
 <?php
 
 use App\Ai\Tools\ParseMealMessageTool;
-use App\Services\MealMessageParsingService;
+use App\Services\MealExtractionService;
 use Laravel\Ai\Tools\Request;
 
 it('returns parsed meal payload as json', function () {
-    $parsingService = Mockery::mock(MealMessageParsingService::class);
-    $parsingService->shouldReceive('parse')
+    $extractionService = Mockery::mock(MealExtractionService::class);
+    $extractionService->shouldReceive('parse')
         ->once()
         ->andReturn([
             'status' => 'parsed',
             'meal_type' => 'jantar',
             'next_step' => 'estimate_meal',
             'raw_message' => 'arroz 130g',
+            'consumed_at' => '2026-06-14 20:00:00',
+            'date_reference' => 'today',
+            'date_resolution' => 'structured_datetime',
             'items' => [
-                ['description' => 'arroz', 'quantity_grams' => 130, 'quantity_text' => null, 'context' => null],
+                ['description' => 'arroz', 'quantity_grams' => 130, 'quantity_text' => null, 'context' => null, 'confidence' => 'high'],
             ],
             'meal_total_quantity_grams' => null,
             'is_composite_meal' => false,
@@ -22,9 +25,10 @@ it('returns parsed meal payload as json', function () {
             'assistant_response_guide' => 'Use a estrutura retornada em estimate_meal.',
             'clarification_question' => null,
             'clarification_reason' => null,
+            'extraction_source' => 'structured_ai',
         ]);
 
-    $tool = new ParseMealMessageTool($parsingService);
+    $tool = new ParseMealMessageTool($extractionService);
 
     $result = $tool->handle(new Request([
         'message' => 'arroz 130g',
@@ -36,6 +40,7 @@ it('returns parsed meal payload as json', function () {
             'status' => 'parsed',
             'meal_type' => 'jantar',
             'next_step' => 'estimate_meal',
+            'consumed_at' => '2026-06-14 20:00:00',
             'items_count' => 1,
         ]);
 
@@ -45,14 +50,17 @@ it('returns parsed meal payload as json', function () {
 });
 
 it('returns clarification payload as json for ambiguous composite meals', function () {
-    $parsingService = Mockery::mock(MealMessageParsingService::class);
-    $parsingService->shouldReceive('parse')
+    $extractionService = Mockery::mock(MealExtractionService::class);
+    $extractionService->shouldReceive('parse')
         ->once()
         ->andReturn([
             'status' => 'clarification_required',
             'meal_type' => 'almoco',
             'next_step' => 'ask_for_clarification',
             'raw_message' => 'marmita de 1kg',
+            'consumed_at' => '2026-06-14 12:30:00',
+            'date_reference' => 'today',
+            'date_resolution' => 'assumed_today',
             'items' => [],
             'meal_total_quantity_grams' => 1000,
             'is_composite_meal' => true,
@@ -60,9 +68,10 @@ it('returns clarification payload as json for ambiguous composite meals', functi
             'assistant_response_guide' => 'Peça a divisão dos itens antes de estimar.',
             'clarification_question' => 'Essa refeição de 1000g parece ser o peso total do conjunto. Você consegue me dizer aproximadamente quanto tinha de cada item?',
             'clarification_reason' => 'Peso total informado para refeição composta sem divisão por item.',
+            'extraction_source' => 'structured_ai',
         ]);
 
-    $tool = new ParseMealMessageTool($parsingService);
+    $tool = new ParseMealMessageTool($extractionService);
 
     $result = $tool->handle(new Request([
         'message' => 'Comi marmita de 1kg com arroz e feijão',

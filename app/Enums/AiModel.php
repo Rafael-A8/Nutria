@@ -13,7 +13,7 @@ enum AiModel: string
     public function sdkModel(): string
     {
         return match ($this) {
-            self::Gemini => 'gemini-3.1-pro-preview',
+            self::Gemini => 'gemini-3.5-flash',
             self::OpenAI => 'gpt-4o',
         };
     }
@@ -55,7 +55,7 @@ enum AiModel: string
     public function label(): string
     {
         return match ($this) {
-            self::Gemini => 'Gemini',
+            self::Gemini => 'Gemini 3.5 Flash',
             self::OpenAI => 'OpenAI',
         };
     }
@@ -63,7 +63,7 @@ enum AiModel: string
     public function description(): string
     {
         return match ($this) {
-            self::Gemini => 'Recomendado — mais inteligente e eficaz.',
+            self::Gemini => 'Teste — Gemini 3.5 Flash com thinking medium.',
             self::OpenAI => 'Alternativo — modelo treinado pela OpenAI.',
         };
     }

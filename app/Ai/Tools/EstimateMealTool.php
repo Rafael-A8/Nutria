@@ -23,7 +23,7 @@ class EstimateMealTool implements Tool
      */
     public function description(): Stringable|string
     {
-        return 'Deterministically estimates meals before registration. Use after `parse_meal_message` when the user describes food in free text. If status clarification_required is returned, ask the suggested question and do not register yet. If status estimated is returned, use exactly `items_for_registration_text` in the `register_meal` call and leverage `user_facing_summary` to craft the final response.';
+        return 'Estimates meals before registration. Use after `parse_meal_message` when the user describes food in free text. Pass consumed_at from parse_meal_message. If status clarification_required is returned, ask the suggested question and do not register. If registration_allowed is true, copy items_for_registration_text, consumed_at, expected_items_count, and pending_items_count directly into `register_meal`. Never register when registration_allowed is false.';
     }
 
     /**
@@ -32,6 +32,7 @@ class EstimateMealTool implements Tool
     public function handle(Request $request): Stringable|string
     {
         $items = $this->normalizeItems($request['items'] ?? '');
+        $consumedAt = $request['consumed_at'] ?? null;
 
         $result = $this->mealEstimationService->estimate(
             user: $this->user,
@@ -44,6 +45,11 @@ class EstimateMealTool implements Tool
             return json_encode([
                 'status' => $result['status'],
                 'next_step' => 'ask_for_clarification',
+                'meal_type' => $result['meal_type'] ?? $request['meal_type'],
+                'consumed_at' => $consumedAt,
+                'registration_allowed' => false,
+                'expected_items_count' => count($items),
+                'pending_items_count' => count($result['low_confidence_items'] ?? []),
                 'items_for_registration_text' => '',
                 'low_confidence_items_text' => $this->formatLowConfidenceItemsText($result['low_confidence_items'] ?? []),
                 'clarification_question' => $result['clarification_question'],
@@ -52,16 +58,28 @@ class EstimateMealTool implements Tool
             ], JSON_UNESCAPED_UNICODE);
         }
 
+        $pendingItemsCount = count($result['low_confidence_items'] ?? []);
+        $itemsForRegistrationCount = count($result['items_for_registration'] ?? []);
+        $registrationAllowed = $pendingItemsCount === 0
+            && ($result['next_step'] ?? null) === 'register_meal'
+            && $itemsForRegistrationCount === count($items);
+
         // Senão, retorna só o que o agente precisa para continuar
         return json_encode([
             'status' => $result['status'],
             'next_step' => $result['next_step'] ?? 'register_meal',
             'meal_type' => $result['meal_type'] ?? $request['meal_type'],
+            'consumed_at' => $consumedAt,
+            'registration_allowed' => $registrationAllowed,
+            'expected_items_count' => count($items),
+            'pending_items_count' => $pendingItemsCount,
             'total_calories' => $result['total_calories'] ?? 0,
             'low_confidence_items_text' => $this->formatLowConfidenceItemsText($result['low_confidence_items'] ?? []),
-            'items_for_registration_text' => $this->formatItemsForRegistrationText($result['items_for_registration'] ?? []),
-            'items_for_registration_count' => count($result['items_for_registration'] ?? []),
-            'low_confidence_items_count' => count($result['low_confidence_items'] ?? []),
+            'items_for_registration_text' => $registrationAllowed
+                ? $this->formatItemsForRegistrationText($result['items_for_registration'] ?? [])
+                : '',
+            'items_for_registration_count' => $itemsForRegistrationCount,
+            'low_confidence_items_count' => $pendingItemsCount,
             'user_facing_summary' => $result['user_facing_summary'] ?? '',
             'assistant_response_guide' => $result['assistant_response_guide'] ?? '',
         ], JSON_UNESCAPED_UNICODE);
@@ -74,6 +92,9 @@ class EstimateMealTool implements Tool
     {
         return [
             'meal_type' => $schema->string()->description('Meal type: cafe_da_manha, almoco, lanche, jantar, sobremesa, outro.')->required(),
+            'consumed_at' => $schema->string()
+                ->description('Datetime returned by parse_meal_message. Pass it unchanged so yesterday/today meals are registered on the correct day.')
+                ->required(),
             'items' => $schema->string()
                 ->description('One item per line. Use: description=...; quantity_grams=...; quantity_text=...; context=.... Leave empty values blank. Do not use JSON.')
                 ->required(),
@@ -143,8 +164,8 @@ class EstimateMealTool implements Tool
             'quantity_grams' => isset($data['quantity_grams']) && $data['quantity_grams'] !== ''
                 ? (int) $data['quantity_grams']
                 : null,
-            'quantity_text' => $data['quantity_text'] !== '' ? $data['quantity_text'] : null,
-            'context' => $data['context'] !== '' ? $data['context'] : null,
+            'quantity_text' => ($data['quantity_text'] ?? '') !== '' ? $data['quantity_text'] : null,
+            'context' => ($data['context'] ?? '') !== '' ? $data['context'] : null,
         ];
     }
 
