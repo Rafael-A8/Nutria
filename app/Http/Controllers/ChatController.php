@@ -12,7 +12,6 @@ use App\Services\ChatMessageService;
 use App\Services\SummaryService;
 use Carbon\CarbonInterface;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
@@ -181,10 +180,30 @@ class ChatController extends Controller
         $cycleStart = now()->startOfWeek(CarbonInterface::MONDAY);
         $cycleEnd = now()->endOfWeek(CarbonInterface::SUNDAY);
 
-        return DB::table('agent_conversations')
+        $conversationId = DB::table('agent_conversations')
             ->where('user_id', $userId)
             ->whereBetween('created_at', [$cycleStart, $cycleEnd])
             ->latest('updated_at')
             ->value('id');
+
+        if (! is_string($conversationId) || $this->hasIncompleteToolCallHistory($conversationId)) {
+            return null;
+        }
+
+        return $conversationId;
+    }
+
+    private function hasIncompleteToolCallHistory(string $conversationId): bool
+    {
+        return DB::table('agent_conversation_messages')
+            ->where('conversation_id', $conversationId)
+            ->where('role', 'assistant')
+            ->get(['tool_calls', 'tool_results'])
+            ->contains(function (object $message): bool {
+                $toolCalls = json_decode($message->tool_calls ?: '[]', true) ?: [];
+                $toolResults = json_decode($message->tool_results ?: '[]', true) ?: [];
+
+                return count($toolCalls) > count($toolResults);
+            });
     }
 }

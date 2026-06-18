@@ -36,7 +36,7 @@ use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Promptable;
 use Stringable;
 
-#[MaxSteps(8)]
+#[MaxSteps(24)]
 class NutritionistAgent implements Agent, Conversational, HasMiddleware, HasProviderOptions, HasTools
 {
     use Promptable, RemembersConversations;
