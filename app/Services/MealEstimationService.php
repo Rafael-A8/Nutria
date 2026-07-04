@@ -7,6 +7,7 @@ use App\Models\User;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Laravel\Ai\Enums\Lab;
 use Throwable;
 
 use function Laravel\Ai\agent;
@@ -480,9 +481,8 @@ class MealEstimationService
                 schema: fn (JsonSchema $schema): array => $this->lowConfidenceEstimatorSchema($schema),
             )->prompt(
                 $this->lowConfidenceEstimatorPrompt($mealType, $items),
-                provider: 'openai',
+                provider: Lab::OpenAI,
                 model: 'gpt-4o-mini',
-                timeout: 30,
             );
 
             /** @var array<string, mixed> $structured */

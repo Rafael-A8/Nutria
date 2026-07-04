@@ -8,6 +8,7 @@ use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Prompts\AgentPrompt;
 
 use function Laravel\Ai\agent;
@@ -53,7 +54,7 @@ class Guardrails
             ],
         )->prompt(
             $prompt->prompt,
-            provider: 'openai',
+            provider: Lab::OpenAI,
             model: 'gpt-4o-mini',
         );
 

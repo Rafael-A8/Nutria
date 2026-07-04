@@ -11,6 +11,7 @@ use Carbon\CarbonInterface;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
+use Laravel\Ai\Enums\Lab;
 
 use function Laravel\Ai\agent;
 
@@ -81,7 +82,11 @@ class SummaryService
 
         $response = agent(
             instructions: 'Generate an internal nutrition summary in English for one completed conversation cycle. Use the nutrition statistics and user conversation signals. Use no more than 4 short paragraphs. Highlight patterns, difficulties, progress, and one light orientation for the next cycle. Do not address the user directly. Do not invent events that are not present in the provided data.',
-        )->prompt($statsFormatted);
+        )->prompt(
+            $statsFormatted,
+            provider: Lab::OpenAI,
+            model: 'gpt-4o-mini',
+        );
 
         $summary = $user->conversationSummaries()->create([
             'summary_type' => $summaryType,
