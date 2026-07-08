@@ -59,3 +59,19 @@ it('still requires clarification for high-impact cooking fat in preparation', fu
         ->and($result['is_low_confidence'])->toBeFalse()
         ->and($result['treat_as_preparation_only'])->toBeTrue();
 });
+
+it('requires clarification for cooking fat without quantity', function () {
+    $service = new MealAmbiguityService;
+
+    $result = $service->assess(
+        description: 'manteiga',
+        quantityGrams: null,
+        isCookingFat: true,
+        hasReference: true,
+        hasHistory: false,
+    );
+
+    expect($result['requires_clarification'])->toBeTrue()
+        ->and($result['is_low_confidence'])->toBeFalse()
+        ->and($result['reason'])->toContain('Ingrediente gorduroso sem quantidade definida');
+});

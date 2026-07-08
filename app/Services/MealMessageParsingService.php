@@ -111,14 +111,23 @@ class MealMessageParsingService
                 continue;
             }
 
-            $quantity = $this->extractQuantity($normalizedMessage, $aliasMatch['normalized_alias'], $reference['is_cooking_fat'] ?? false);
+            $isCookingFat = $reference['is_cooking_fat'] ?? false;
+            $quantity = $this->extractQuantity($normalizedMessage, $aliasMatch['normalized_alias'], $isCookingFat);
+
+            if ($isCookingFat && $quantity['quantity_grams'] !== null && $this->measurementIsSeparatedFromCookingFatByPrimaryFood($normalizedMessage, $aliasMatch['offset'])) {
+                $quantity = [
+                    'quantity_grams' => null,
+                    'quantity_text' => null,
+                ];
+            }
+
             $description = $this->buildDescription(
                 $aliasMatch['display_alias'],
                 $aliasMatch['normalized_alias'],
                 $normalizedMessage,
                 $aliasMatch['offset'],
             );
-            $context = $this->detectContext($normalizedMessage, $aliasMatch['offset'], $reference['is_cooking_fat'] ?? false);
+            $context = $this->detectContext($normalizedMessage, $aliasMatch['offset'], $isCookingFat);
 
             $matches[] = [
                 'description' => $description,
@@ -285,7 +294,7 @@ class MealMessageParsingService
     {
         $window = substr($normalizedMessage, max(0, $offset - 40), 100);
 
-        if ($isCookingFat && preg_match('/(fiz(?: ele| ela)? com|feito com|fritei(?: no| com)?|grelhei com|assado com|usei no preparo|usad[ao] no preparo|no preparo)/', $window)) {
+        if ($isCookingFat && preg_match('/(fiz(?: ele| ela)? com|feito com|fritei(?: no| com)?|grelhei com|grelhad[ao] (?:na|no|com)|assado com|usei no preparo|usad[ao] no preparo|no preparo)/', $window)) {
             return 'usada no preparo';
         }
 
@@ -324,6 +333,40 @@ class MealMessageParsingService
         $prefix = substr($normalizedMessage, max(0, $offset - 8), 8);
 
         return preg_match('/\bsem\s+$/', $prefix) === 1;
+    }
+
+    private function measurementIsSeparatedFromCookingFatByPrimaryFood(string $normalizedMessage, int $cookingFatOffset): bool
+    {
+        $prefix = substr($normalizedMessage, 0, $cookingFatOffset);
+
+        if (! preg_match_all('/\d+(?:[\.,]\d+)?\s*(?:kg|g|ml)\b/', $prefix, $measurementMatches, PREG_OFFSET_CAPTURE)) {
+            return false;
+        }
+
+        $lastMeasurement = collect($measurementMatches[0])->last();
+
+        if (! is_array($lastMeasurement)) {
+            return false;
+        }
+
+        $measurementEnd = $lastMeasurement[1] + strlen($lastMeasurement[0]);
+        $betweenMeasurementAndFat = substr($normalizedMessage, $measurementEnd, $cookingFatOffset - $measurementEnd);
+
+        foreach ($this->references() as $reference) {
+            if (($reference['is_cooking_fat'] ?? false) === true) {
+                continue;
+            }
+
+            foreach ($reference['aliases'] as $alias) {
+                $normalizedAlias = $this->normalize($alias);
+
+                if ($normalizedAlias !== '' && str_contains($betweenMeasurementAndFat, $normalizedAlias)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     private function detectCompositeMealTotalGrams(string $normalizedMessage): ?int

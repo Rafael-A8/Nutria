@@ -11,6 +11,8 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Schema;
 use Laravel\Ai\AnonymousAgent;
 use Laravel\Ai\Embeddings;
+use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\Prompts\AgentPrompt;
 
 beforeEach(function () {
     $this->user = User::factory()->create();
@@ -43,7 +45,12 @@ it('defines supported conversation summary trigger types', function () {
 
 it('generates summary for previous conversation cycle', function () {
     Embeddings::fake();
-    AnonymousAgent::fake(['Weekly summary generated.']);
+    AnonymousAgent::fake(function (string $prompt, $attachments, $provider, string $model): string {
+        expect($provider->name())->toBe(Lab::OpenAI->value)
+            ->and($model)->toBe('gpt-4o-mini');
+
+        return 'Weekly summary generated.';
+    });
 
     Carbon::setTestNow(Carbon::parse('2026-06-03 20:30:00'));
     $this->chatMessageService->storeUserMessage($this->user, 'Hoje fui em um aniversário e comi mais do que planejava.');
@@ -89,19 +96,24 @@ it('generates summary for previous conversation cycle', function () {
         'content' => 'Weekly summary generated.',
     ]);
 
-    AnonymousAgent::assertPrompted(fn ($prompt): bool => str_contains(
-        $prompt->prompt,
-        'Conversation cycle from 2026-06-01 to 2026-06-07:'
-    ) && str_contains(
-        $prompt->prompt,
-        '- User conversation signals:'
-    ) && str_contains(
-        $prompt->prompt,
-        'Hoje fui em um aniversário'
-    ) && ! str_contains(
-        $prompt->prompt,
-        'Resposta do agente que não deve entrar no resumo.'
-    ));
+    AnonymousAgent::assertPrompted(fn (AgentPrompt $prompt): bool => $prompt->provider->name() === Lab::OpenAI->value
+        && $prompt->model === 'gpt-4o-mini'
+        && str_contains(
+            $prompt->prompt,
+            'Conversation cycle from 2026-06-01 to 2026-06-07:'
+        )
+        && str_contains(
+            $prompt->prompt,
+            '- User conversation signals:'
+        )
+        && str_contains(
+            $prompt->prompt,
+            'Hoje fui em um aniversário'
+        )
+        && ! str_contains(
+            $prompt->prompt,
+            'Resposta do agente que não deve entrar no resumo.'
+        ));
 
     Carbon::setTestNow();
 });

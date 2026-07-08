@@ -23,6 +23,26 @@ it('parses free-text meal items with quantities and preparation context', functi
         ]);
 });
 
+it('does not assign tilapia grams to butter when grilled in butter', function () {
+    $service = new MealMessageParsingService;
+
+    $result = $service->parse('120g de tilápia grelhada na manteiga', 'jantar');
+
+    expect($result['status'])->toBe('parsed')
+        ->and($result['items'])->toHaveCount(2)
+        ->and($result['items'][0])->toMatchArray([
+            'description' => 'tilapia',
+            'quantity_grams' => 120,
+        ])
+        ->and($result['items'][1])->toMatchArray([
+            'description' => 'manteiga',
+            'quantity_grams' => null,
+            'quantity_text' => null,
+            'context' => 'usada no preparo',
+        ])
+        ->and(collect($result['items'])->contains(fn (array $item): bool => $item['description'] === 'manteiga' && $item['quantity_grams'] === 120))->toBeFalse();
+});
+
 it('parses barbecue items and beer cans without dropping relevant foods', function () {
     $service = new MealMessageParsingService;
 

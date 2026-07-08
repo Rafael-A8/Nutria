@@ -2,7 +2,6 @@
 
 namespace App\Services;
 
-use App\Models\MealItem;
 use App\Models\User;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Support\Facades\Log;
@@ -29,7 +28,7 @@ class MealEstimationService
      *     meal_type: string,
      *     next_step: 'register_meal'|'ask_for_clarification',
      *     items_for_registration: list<array{description: string, quantity_grams: int|null, calories: int}>,
-     *     estimated_items: list<array{original_description: string, description: string, quantity_grams: int|null, calories: int, source: string, assumptions: list<string>, calculation_line: string}>,
+     *     estimated_items: list<array{original_description: string, description: string, quantity_grams: int|null, calories: int, source: string, assumptions: list<string>, calculation_line: string, reference_key?: string|null}>,
      *     low_confidence_items: list<array{description: string, quantity_grams: int|null, quantity_text: string|null}>,
      *     total_calories: int|null,
      *     assumptions: list<string>,
@@ -86,7 +85,7 @@ class MealEstimationService
                 'calories' => $estimate['calories'],
             ];
 
-            $estimatedItems[] = [
+            $estimatedItem = [
                 'original_description' => $estimate['original_description'],
                 'description' => $estimate['description'],
                 'quantity_grams' => $estimate['quantity_grams'],
@@ -96,6 +95,12 @@ class MealEstimationService
                 'calculation_line' => $estimate['calculation_line'],
             ];
 
+            if (array_key_exists('reference_key', $estimate)) {
+                $estimatedItem['reference_key'] = $estimate['reference_key'];
+            }
+
+            $this->logEstimatedItem($estimatedItem);
+            $estimatedItems[] = $estimatedItem;
             $allAssumptions = [...$allAssumptions, ...$estimate['assumptions']];
             $calculationLines[] = $estimate['calculation_line'];
             $totalCalories += $estimate['calories'];
@@ -129,6 +134,7 @@ class MealEstimationService
                     'calories' => $estimate['calories'],
                 ];
 
+                $this->logEstimatedItem($estimate);
                 $estimatedItems[] = $estimate;
                 $allAssumptions = [...$allAssumptions, ...$estimate['assumptions']];
                 $calculationLines[] = $estimate['calculation_line'];
@@ -171,6 +177,7 @@ class MealEstimationService
      *     source?: string,
      *     assumptions?: list<string>,
      *     calculation_line?: string,
+     *     reference_key?: string|null,
      *     clarification_question?: string,
      *     clarification_reason?: string,
      *     quantity_text?: string|null
@@ -181,14 +188,22 @@ class MealEstimationService
         $originalDescription = trim($item['description']);
         $quantityText = $this->cleanOptionalText($item['quantity_text'] ?? null);
         $context = $this->cleanOptionalText($item['context'] ?? null);
-        $reference = $this->referenceFor($originalDescription);
-        $historyMatch = $this->bestHistoryMatch($user, $originalDescription);
+        $referenceMatch = $this->referenceMatchFor($originalDescription);
+        $reference = $referenceMatch['reference'] ?? null;
+        $referenceKey = $referenceMatch['key'] ?? null;
+
+        if (
+            ($reference['is_cooking_fat'] ?? false) === true
+            && $this->quantityAppearsToBelongToPrimaryFood($item['quantity_grams'] ?? null, $quantityText)
+            && $this->hasNonFatReferenceMatch($originalDescription, $referenceKey)
+        ) {
+            return $this->clarifyCookingFatInCompoundItem($originalDescription);
+        }
+
         $resolvedQuantityGrams = $this->resolveQuantityGrams(
-            description: $originalDescription,
             explicitQuantityGrams: $item['quantity_grams'] ?? null,
             quantityText: $quantityText,
             reference: $reference,
-            historyMatch: $historyMatch,
         );
 
         $ambiguity = $this->ambiguityService->assess(
@@ -198,7 +213,7 @@ class MealEstimationService
             context: $context,
             isCookingFat: $reference['is_cooking_fat'] ?? false,
             hasReference: $reference !== null,
-            hasHistory: $historyMatch !== null,
+            hasHistory: false,
         );
 
         if ($ambiguity['requires_clarification']) {
@@ -211,15 +226,11 @@ class MealEstimationService
         }
 
         if (($reference['is_cooking_fat'] ?? false) && $ambiguity['treat_as_preparation_only']) {
-            return $this->estimatePreparationFat($originalDescription, $resolvedQuantityGrams, $reference);
-        }
-
-        if ($historyMatch !== null) {
-            return $this->estimateFromHistory($originalDescription, $resolvedQuantityGrams, $historyMatch, $reference);
+            return $this->estimatePreparationFat($originalDescription, $resolvedQuantityGrams, $reference, $referenceKey);
         }
 
         if ($reference !== null) {
-            return $this->estimateFromReference($originalDescription, $resolvedQuantityGrams, $reference);
+            return $this->estimateFromReference($originalDescription, $resolvedQuantityGrams, $reference, $referenceKey);
         }
 
         return [
@@ -232,9 +243,9 @@ class MealEstimationService
 
     /**
      * @param  array{aliases: list<string>, calories_per_100g?: int, default_grams: int, default_calories?: int, is_cooking_fat?: bool, source?: string, confidence?: string, high_variation?: bool, variation_note?: string}  $reference
-     * @return array{status: 'estimated', original_description: string, description: string, quantity_grams: int, calories: int, source: string, assumptions: list<string>, calculation_line: string}
+     * @return array{status: 'estimated', original_description: string, description: string, quantity_grams: int, calories: int, source: string, assumptions: list<string>, calculation_line: string, reference_key: string|null}
      */
-    private function estimatePreparationFat(string $originalDescription, int $resolvedQuantityGrams, array $reference): array
+    private function estimatePreparationFat(string $originalDescription, int $resolvedQuantityGrams, array $reference, ?string $referenceKey): array
     {
         $consumedQuantityGrams = max(1, (int) round($resolvedQuantityGrams * $this->preparationRetentionFactor()));
         $calories = $this->caloriesFromReference($reference, $consumedQuantityGrams);
@@ -252,49 +263,15 @@ class MealEstimationService
                 "{$originalDescription} usado no preparo com retenção estimada de 30%.",
             ],
             'calculation_line' => "{$originalDescription} no preparo: {$resolvedQuantityGrams}g usados × {$retentionPercentage}% de retenção = {$consumedQuantityGrams}g consumidos → {$consumedQuantityGrams} × {$caloriesPer100g}/100 = ~{$calories} kcal.",
+            'reference_key' => $referenceKey,
         ];
     }
 
     /**
      * @param  array{aliases: list<string>, calories_per_100g?: int, default_grams: int, default_calories?: int, is_cooking_fat?: bool, source?: string, confidence?: string, high_variation?: bool, variation_note?: string}|null  $reference
-     * @return array{status: 'estimated', original_description: string, description: string, quantity_grams: int|null, calories: int, source: string, assumptions: list<string>, calculation_line: string}
+     * @return array{status: 'estimated', original_description: string, description: string, quantity_grams: int, calories: int, source: string, assumptions: list<string>, calculation_line: string, reference_key: string|null}
      */
-    private function estimateFromHistory(string $originalDescription, ?int $resolvedQuantityGrams, MealItem $historyMatch, ?array $reference): array
-    {
-        $historyQuantity = $historyMatch->quantity_grams;
-        $quantityGrams = $resolvedQuantityGrams ?? $historyQuantity;
-        $assumptions = [
-            "Estimativa baseada em item semelhante do histórico: {$historyMatch->description}.",
-        ];
-
-        if ($quantityGrams !== null && $historyQuantity !== null && $historyQuantity > 0) {
-            $calories = (int) round($historyMatch->calories * ($quantityGrams / $historyQuantity));
-            $assumptions[] = 'Calorias ajustadas proporcionalmente pela gramagem informada.';
-            $calculationLine = "{$originalDescription} {$quantityGrams}g → histórico semelhante {$historyMatch->description} ({$historyQuantity}g = {$historyMatch->calories} kcal) → ~{$calories} kcal.";
-        } else {
-            $calories = (int) $historyMatch->calories;
-            $quantityGrams ??= $reference['default_grams'] ?? null;
-            $assumptions[] = 'Mantido valor calórico do item histórico por falta de gramagem específica.';
-            $calculationLine = "{$originalDescription} → histórico semelhante {$historyMatch->description} = ~{$calories} kcal.";
-        }
-
-        return [
-            'status' => 'estimated',
-            'original_description' => $originalDescription,
-            'description' => $originalDescription,
-            'quantity_grams' => $quantityGrams,
-            'calories' => $calories,
-            'source' => 'user_history',
-            'assumptions' => $assumptions,
-            'calculation_line' => $calculationLine,
-        ];
-    }
-
-    /**
-     * @param  array{aliases: list<string>, calories_per_100g?: int, default_grams: int, default_calories?: int, is_cooking_fat?: bool, source?: string, confidence?: string, high_variation?: bool, variation_note?: string}  $reference
-     * @return array{status: 'estimated', original_description: string, description: string, quantity_grams: int, calories: int, source: string, assumptions: list<string>, calculation_line: string}
-     */
-    private function estimateFromReference(string $originalDescription, ?int $resolvedQuantityGrams, array $reference): array
+    private function estimateFromReference(string $originalDescription, ?int $resolvedQuantityGrams, array $reference, ?string $referenceKey): array
     {
         $quantityGrams = $resolvedQuantityGrams ?? $reference['default_grams'];
         $calories = $this->caloriesFromReference($reference, $quantityGrams);
@@ -323,6 +300,7 @@ class MealEstimationService
             'source' => 'reference_table',
             'assumptions' => $assumptions,
             'calculation_line' => $calculationLine,
+            'reference_key' => $referenceKey,
         ];
     }
 
@@ -342,11 +320,9 @@ class MealEstimationService
      * @param  array{aliases: list<string>, calories_per_100g?: int, default_grams: int, default_calories?: int, is_cooking_fat?: bool, source?: string, confidence?: string, high_variation?: bool, variation_note?: string}|null  $reference
      */
     private function resolveQuantityGrams(
-        string $description,
         ?int $explicitQuantityGrams,
         ?string $quantityText,
         ?array $reference,
-        ?MealItem $historyMatch,
     ): ?int {
         if ($explicitQuantityGrams !== null) {
             return $explicitQuantityGrams;
@@ -360,8 +336,8 @@ class MealEstimationService
             }
         }
 
-        if ($historyMatch?->quantity_grams) {
-            return $historyMatch->quantity_grams;
+        if (($reference['is_cooking_fat'] ?? false) === true) {
+            return null;
         }
 
         return $reference['default_grams'] ?? null;
@@ -409,15 +385,15 @@ class MealEstimationService
     }
 
     /**
-     * @return array{aliases: list<string>, calories_per_100g?: int, default_grams: int, default_calories?: int, is_cooking_fat?: bool, source?: string, confidence?: string, high_variation?: bool, variation_note?: string}|null
+     * @return array{key: string, reference: array{aliases: list<string>, calories_per_100g?: int, default_grams: int, default_calories?: int, is_cooking_fat?: bool, source?: string, confidence?: string, high_variation?: bool, variation_note?: string}}|null
      */
-    private function referenceFor(string $description): ?array
+    private function referenceMatchFor(string $description): ?array
     {
         $normalizedDescription = $this->normalize($description);
-        $bestReference = null;
+        $bestMatch = null;
         $bestAliasLength = 0;
 
-        foreach ($this->references() as $reference) {
+        foreach ($this->references() as $key => $reference) {
             foreach ($reference['aliases'] as $alias) {
                 $normalizedAlias = $this->normalize($alias);
                 $aliasLength = strlen($normalizedAlias);
@@ -427,17 +403,91 @@ class MealEstimationService
                 }
 
                 if (str_contains($normalizedDescription, $normalizedAlias)) {
-                    $bestReference = $reference;
+                    $bestMatch = [
+                        'key' => $key,
+                        'reference' => $reference,
+                    ];
                     $bestAliasLength = $aliasLength;
                 }
             }
         }
 
-        return $bestReference;
+        return $bestMatch;
+    }
+
+    private function quantityAppearsToBelongToPrimaryFood(?int $explicitQuantityGrams, ?string $quantityText): bool
+    {
+        if ($explicitQuantityGrams !== null) {
+            return true;
+        }
+
+        if ($quantityText === null) {
+            return false;
+        }
+
+        $normalizedText = $this->normalize($quantityText);
+
+        return preg_match('/\b(g|grama|gramas|kg|quilo|quilos|unidade|unidades|porcao|porcoes)\b/', $normalizedText) === 1;
+    }
+
+    private function hasNonFatReferenceMatch(string $description, ?string $selectedReferenceKey): bool
+    {
+        $normalizedDescription = $this->normalize($description);
+
+        foreach ($this->references() as $key => $reference) {
+            if ($key === $selectedReferenceKey || ($reference['is_cooking_fat'] ?? false) === true) {
+                continue;
+            }
+
+            foreach ($reference['aliases'] as $alias) {
+                $normalizedAlias = $this->normalize($alias);
+
+                if ($normalizedAlias !== '' && str_contains($normalizedDescription, $normalizedAlias)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /**
-     * @param  list<array{original_description: string, description: string, quantity_grams: int|null, calories: int, source: string, assumptions: list<string>, calculation_line: string}>  $estimatedItems
+     * @return array{status: 'clarification_required', original_description: string, clarification_question: string, clarification_reason: string}
+     */
+    private function clarifyCookingFatInCompoundItem(string $originalDescription): array
+    {
+        return [
+            'status' => 'clarification_required',
+            'original_description' => $originalDescription,
+            'clarification_question' => 'Qual foi a quantidade aproximada da gordura usada no preparo e ela foi consumida inteira ou apenas usada para grelhar/refogar?',
+            'clarification_reason' => 'Cooking fat appears together with another primary food, so the provided quantity must not be applied to the fat.',
+        ];
+    }
+
+    /**
+     * @param  array{original_description?: string, description: string, quantity_grams: int|null, calories: int, source: string, assumptions: list<string>, calculation_line: string, reference_key?: string|null, history_item_id?: int|null}  $estimate
+     */
+    private function logEstimatedItem(array $estimate): void
+    {
+        $context = [
+            'source' => $estimate['source'],
+            'normalized_description' => $this->normalize($estimate['original_description'] ?? $estimate['description']),
+            'calculation_line' => $estimate['calculation_line'],
+        ];
+
+        if (array_key_exists('reference_key', $estimate) && $estimate['reference_key'] !== null) {
+            $context['reference_key'] = $estimate['reference_key'];
+        }
+
+        if (array_key_exists('history_item_id', $estimate)) {
+            $context['history_item_id'] = $estimate['history_item_id'];
+        }
+
+        Log::info('nutrition.legacy_estimate.item', $context);
+    }
+
+    /**
+     * @param  list<array{original_description: string, description: string, quantity_grams: int|null, calories: int, source: string, assumptions: list<string>, calculation_line: string, reference_key?: string|null}>  $estimatedItems
      * @param  list<string>  $assumptions
      */
     private function buildEstimatedSummary(string $mealType, array $estimatedItems, int $totalCalories, array $assumptions): string
@@ -467,7 +517,7 @@ class MealEstimationService
     /**
      * @param  list<array{description: string, quantity_grams: int|null, quantity_text: string|null}>  $items
      * @return array{
-     *     estimated_items: list<array{original_description: string, description: string, quantity_grams: int|null, calories: int, source: string, assumptions: list<string>, calculation_line: string}>,
+     *     estimated_items: list<array{original_description: string, description: string, quantity_grams: int|null, calories: int, source: string, assumptions: list<string>, calculation_line: string, reference_key?: string|null}>,
      *     unresolved_items: list<array{description: string, quantity_grams: int|null, quantity_text: string|null}>,
      *     clarification_question: string,
      *     clarification_reason: string
@@ -560,7 +610,7 @@ class MealEstimationService
      * @param  list<array{description: string, quantity_grams: int|null, quantity_text: string|null}>  $originalItems
      * @param  array<string, mixed>  $structured
      * @return array{
-     *     estimated_items: list<array{original_description: string, description: string, quantity_grams: int|null, calories: int, source: string, assumptions: list<string>, calculation_line: string}>,
+     *     estimated_items: list<array{original_description: string, description: string, quantity_grams: int|null, calories: int, source: string, assumptions: list<string>, calculation_line: string, reference_key?: string|null}>,
      *     unresolved_items: list<array{description: string, quantity_grams: int|null, quantity_text: string|null}>,
      *     clarification_question: string,
      *     clarification_reason: string
@@ -666,13 +716,6 @@ class MealEstimationService
             'sobremesa' => 'sobremesa',
             default => str_replace('_', ' ', $mealType),
         };
-    }
-
-    private function bestHistoryMatch(User $user, string $description): ?MealItem
-    {
-        return $this->mealService
-            ->findSimilarItems($user, $description, limit: 1)
-            ->first();
     }
 
     private function cleanOptionalText(?string $value): ?string

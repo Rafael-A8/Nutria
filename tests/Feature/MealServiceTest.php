@@ -90,6 +90,18 @@ it('returns empty collection when no similar items exist', function () {
     expect($similar)->toBeEmpty();
 });
 
+it('does not return other users similar items', function () {
+    Embeddings::fake();
+
+    $otherUser = User::factory()->create();
+    $otherMeal = $this->service->registerMeal($otherUser, 'almoco');
+    $otherItem = $this->service->addItem($otherMeal, 'arroz branco', 100, 128);
+
+    $similar = $this->service->findSimilarItems($this->user, 'arroz');
+
+    expect($similar->pluck('id')->all())->not->toContain($otherItem->id);
+});
+
 it('gets today summary', function () {
     Embeddings::fake();
 

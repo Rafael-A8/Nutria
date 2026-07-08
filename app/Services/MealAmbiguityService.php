@@ -18,6 +18,12 @@ class MealAmbiguityService
         'feito com',
         'fritei',
         'grelhei com',
+        'grelhada na',
+        'grelhado na',
+        'grelhada no',
+        'grelhado no',
+        'grelhada com',
+        'grelhado com',
         'assado com',
         'refoguei',
         'untei',
@@ -69,12 +75,12 @@ class MealAmbiguityService
             && $this->looksLikePreparationContext($combinedText)
             && ! $this->looksExplicitlyConsumedContext($combinedText);
 
-        if ($looksLikePreparation && $quantityGrams === null) {
+        if ($isCookingFat && $quantityGrams === null) {
             return [
                 'requires_clarification' => true,
-                'clarification_question' => "Quanto de {$description} foi usado no preparo? Se lembrar, me diga em colheres ou gramas.",
-                'reason' => 'Ingrediente gorduroso usado no preparo sem quantidade definida.',
-                'treat_as_preparation_only' => true,
+                'clarification_question' => "Quanto de {$description} foi usado ou consumido? Se lembrar, me diga em colheres ou gramas.",
+                'reason' => 'Ingrediente gorduroso sem quantidade definida.',
+                'treat_as_preparation_only' => $looksLikePreparation,
                 'is_low_confidence' => false,
             ];
         }

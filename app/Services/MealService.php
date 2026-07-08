@@ -39,8 +39,7 @@ class MealService
     }
 
     /**
-     * Busca itens similares priorizando o histórico do usuário,
-     * complementando com itens globais (base nutricional compartilhada).
+     * Busca itens similares apenas no histórico do próprio usuário.
      *
      * @return Collection<int, MealItem>
      */
@@ -48,29 +47,12 @@ class MealService
     {
         $embeddingQuery = $this->embeddingText($description);
 
-        $userItems = MealItem::query()
+        return MealItem::query()
             ->whereHas('meal', fn ($q) => $q->where('user_id', $user->id))
             ->whereNotNull('embedding')
             ->whereVectorSimilarTo('embedding', $embeddingQuery, minSimilarity: 0.75)
             ->limit($limit)
             ->get();
-
-        if ($userItems->count() >= $limit) {
-            return $userItems;
-        }
-
-        $remaining = $limit - $userItems->count();
-        $excludeIds = $userItems->pluck('id')->all();
-
-        $globalItems = MealItem::query()
-            ->whereHas('meal', fn ($q) => $q->where('user_id', '!=', $user->id))
-            ->whereNotIn('id', $excludeIds)
-            ->whereNotNull('embedding')
-            ->whereVectorSimilarTo('embedding', $embeddingQuery, minSimilarity: 0.75)
-            ->limit($remaining)
-            ->get();
-
-        return $userItems->concat($globalItems);
     }
 
     /**

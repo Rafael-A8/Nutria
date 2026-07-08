@@ -1,17 +1,17 @@
 <?php
 
-use App\Models\MealItem;
 use App\Models\User;
 use App\Services\MealAmbiguityService;
 use App\Services\MealEstimationService;
 use App\Services\MealService;
+use Illuminate\Support\Facades\Log;
 use Laravel\Ai\StructuredAnonymousAgent;
 
 it('estimates common foods deterministically from internal references', function () {
     $user = User::factory()->create();
 
     $mealService = Mockery::mock(MealService::class);
-    $mealService->shouldReceive('findSimilarItems')->twice()->andReturn(collect());
+    $mealService->shouldReceive('findSimilarItems')->never();
 
     $service = new MealEstimationService($mealService, new MealAmbiguityService);
 
@@ -44,7 +44,7 @@ it('asks for clarification before estimating high-impact cooking fat in preparat
     $user = User::factory()->create();
 
     $mealService = Mockery::mock(MealService::class);
-    $mealService->shouldReceive('findSimilarItems')->once()->andReturn(collect());
+    $mealService->shouldReceive('findSimilarItems')->never();
 
     $service = new MealEstimationService($mealService, new MealAmbiguityService);
 
@@ -67,7 +67,7 @@ it('estimates low-impact cooking fat in preparation using retention', function (
     $user = User::factory()->create();
 
     $mealService = Mockery::mock(MealService::class);
-    $mealService->shouldReceive('findSimilarItems')->once()->andReturn(collect());
+    $mealService->shouldReceive('findSimilarItems')->never();
 
     $service = new MealEstimationService($mealService, new MealAmbiguityService);
 
@@ -86,17 +86,58 @@ it('estimates low-impact cooking fat in preparation using retention', function (
         ->and($result['items_for_registration'][0]['quantity_grams'])->toBe(2);
 });
 
-it('can scale calories from a similar historical item', function () {
+it('asks for clarification for cooking fat without an explicit quantity', function () {
     $user = User::factory()->create();
 
-    $historyItem = MealItem::make([
+    $mealService = Mockery::mock(MealService::class);
+    $mealService->shouldReceive('findSimilarItems')->never();
+
+    $service = new MealEstimationService($mealService, new MealAmbiguityService);
+
+    $result = $service->estimate($user, 'jantar', [
+        ['description' => 'manteiga'],
+    ]);
+
+    expect($result['status'])->toBe('clarification_required')
+        ->and($result['items_for_registration'])->toBe([])
+        ->and($result['total_calories'])->toBeNull()
+        ->and($result['clarification_reason'])->toContain('Ingrediente gorduroso sem quantidade definida');
+});
+
+it('does not apply primary food grams to cooking fat in flattened tilapia input', function () {
+    $user = User::factory()->create();
+
+    $mealService = Mockery::mock(MealService::class);
+    $mealService->shouldReceive('findSimilarItems')->never();
+
+    $service = new MealEstimationService($mealService, new MealAmbiguityService);
+
+    $result = $service->estimate($user, 'jantar', [
+        ['description' => 'tilápia grelhada na manteiga', 'quantity_grams' => 120],
+    ]);
+
+    expect($result['status'])->toBe('clarification_required')
+        ->and($result['next_step'])->toBe('ask_for_clarification')
+        ->and($result['items_for_registration'])->toBe([])
+        ->and($result['total_calories'])->toBeNull()
+        ->and($result['clarification_question'])->toContain('gordura usada no preparo')
+        ->and(collect($result['items_for_registration'])->contains(fn (array $item): bool => $item['description'] === 'manteiga' && $item['quantity_grams'] === 120 && $item['calories'] === 860))->toBeFalse();
+});
+
+it('does not scale calories from similar historical items', function () {
+    $user = User::factory()->create();
+    $meal = $user->meals()->create([
+        'meal_type' => 'almoco',
+        'consumed_at' => now(),
+    ]);
+    $meal->items()->create([
         'description' => 'arroz branco',
         'quantity_grams' => 100,
-        'calories' => 128,
+        'calories' => 999,
     ]);
 
     $mealService = Mockery::mock(MealService::class);
-    $mealService->shouldReceive('findSimilarItems')->once()->andReturn(collect([$historyItem]));
+    $mealService->shouldReceive('findSimilarItems')->never();
 
     $service = new MealEstimationService($mealService, new MealAmbiguityService);
 
@@ -110,8 +151,25 @@ it('can scale calories from a similar historical item', function () {
             'quantity_grams' => 150,
             'calories' => 192,
         ])
-        ->and($result['calculation_lines'][0])->toContain('histórico semelhante')
-        ->and($result['estimated_items'][0]['source'])->toBe('user_history');
+        ->and($result['calculation_lines'][0])->not->toContain('histórico semelhante')
+        ->and($result['estimated_items'][0]['source'])->toBe('reference_table')
+        ->and(collect($result['estimated_items'])->pluck('source')->contains('user_history'))->toBeFalse();
+});
+
+it('does not call meal similarity search while estimating calories', function () {
+    $user = User::factory()->create();
+
+    $mealService = Mockery::mock(MealService::class);
+    $mealService->shouldReceive('findSimilarItems')->never();
+
+    $service = new MealEstimationService($mealService, new MealAmbiguityService);
+
+    $result = $service->estimate($user, 'almoco', [
+        ['description' => 'arroz', 'quantity_grams' => 100],
+    ]);
+
+    expect($result['status'])->toBe('estimated')
+        ->and($result['estimated_items'][0]['source'])->toBe('reference_table');
 });
 
 it('reads reference calories from configuration instead of hardcoded prompt data', function () {
@@ -120,7 +178,7 @@ it('reads reference calories from configuration instead of hardcoded prompt data
     config(['nutrition.estimation.references.arroz branco cozido.calories_per_100g' => 140]);
 
     $mealService = Mockery::mock(MealService::class);
-    $mealService->shouldReceive('findSimilarItems')->once()->andReturn(collect());
+    $mealService->shouldReceive('findSimilarItems')->never();
 
     $service = new MealEstimationService($mealService, new MealAmbiguityService);
 
@@ -130,6 +188,29 @@ it('reads reference calories from configuration instead of hardcoded prompt data
 
     expect($result['items_for_registration'][0]['calories'])->toBe(140)
         ->and($result['calculation_lines'][0])->toContain('140/100');
+});
+
+it('logs deterministic estimate lineage without a history item id', function () {
+    Log::spy();
+
+    $user = User::factory()->create();
+
+    $mealService = Mockery::mock(MealService::class);
+    $mealService->shouldReceive('findSimilarItems')->never();
+
+    $service = new MealEstimationService($mealService, new MealAmbiguityService);
+
+    $service->estimate($user, 'almoco', [
+        ['description' => 'arroz', 'quantity_grams' => 100],
+    ]);
+
+    Log::shouldHaveReceived('info')
+        ->with('nutrition.legacy_estimate.item', Mockery::on(fn (array $context): bool => $context['source'] === 'reference_table'
+            && $context['normalized_description'] === 'arroz'
+            && $context['reference_key'] === 'arroz branco cozido'
+            && str_contains($context['calculation_line'], '100 × 128/100')
+            && (! array_key_exists('history_item_id', $context) || $context['history_item_id'] === null)))
+        ->once();
 });
 
 it('uses structured fallback estimation for unknown foods before registration', function () {
@@ -167,7 +248,7 @@ it('uses structured fallback estimation for unknown foods before registration', 
     ]);
 
     $mealService = Mockery::mock(MealService::class);
-    $mealService->shouldReceive('findSimilarItems')->times(3)->andReturn(collect());
+    $mealService->shouldReceive('findSimilarItems')->never();
 
     $service = new MealEstimationService($mealService, new MealAmbiguityService);
 
@@ -221,7 +302,7 @@ it('asks for clarification when structured fallback cannot estimate unknown food
     ]);
 
     $mealService = Mockery::mock(MealService::class);
-    $mealService->shouldReceive('findSimilarItems')->once()->andReturn(collect());
+    $mealService->shouldReceive('findSimilarItems')->never();
 
     $service = new MealEstimationService($mealService, new MealAmbiguityService);
 
@@ -242,7 +323,7 @@ it('estimates barbecue and beer items from internal references', function () {
     $user = User::factory()->create();
 
     $mealService = Mockery::mock(MealService::class);
-    $mealService->shouldReceive('findSimilarItems')->times(5)->andReturn(collect());
+    $mealService->shouldReceive('findSimilarItems')->never();
 
     $service = new MealEstimationService($mealService, new MealAmbiguityService);
 
@@ -273,7 +354,7 @@ it('estimates canjica with calorie dense toppings from internal references', fun
     $user = User::factory()->create();
 
     $mealService = Mockery::mock(MealService::class);
-    $mealService->shouldReceive('findSimilarItems')->times(4)->andReturn(collect());
+    $mealService->shouldReceive('findSimilarItems')->never();
 
     $service = new MealEstimationService($mealService, new MealAmbiguityService);
 
@@ -302,7 +383,7 @@ it('distinguishes farofa from plain cassava flour', function () {
     $user = User::factory()->create();
 
     $mealService = Mockery::mock(MealService::class);
-    $mealService->shouldReceive('findSimilarItems')->twice()->andReturn(collect());
+    $mealService->shouldReceive('findSimilarItems')->never();
 
     $service = new MealEstimationService($mealService, new MealAmbiguityService);
 

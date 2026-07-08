@@ -1,6 +1,7 @@
 <?php
 
 use App\Ai\Agents\NutritionistAgent;
+use App\Ai\Tools\GetSimilarItemsTool;
 use App\Ai\Tools\RegisterMealTool;
 use App\Enums\AiModel;
 use App\Enums\ConversationSummaryTriggerType;
@@ -373,7 +374,17 @@ it('delegates preparation ingredient handling to the estimation flow', function 
         ->and($instructions)->toContain('If `register_meal` returns `registration_blocked`, do not say the meal was registered')
         ->and($instructions)->toContain('Use `context` in `estimate_meal` when there is preparation or indirect consumption')
         ->and($instructions)->toContain('The nutritional database for `estimate_meal` is configured in the application')
-        ->and($instructions)->not->toContain('Arroz branco cozido: ~128 kcal/100g');
+        ->and($instructions)->not->toContain('Arroz branco cozido: ~128 kcal/100g')
+        ->and($instructions)->not->toContain('get_similar_items');
+});
+
+it('does not expose the similar items tool to the nutritionist agent', function () {
+    $user = User::factory()->create();
+    $toolClasses = collect((new NutritionistAgent($user))->tools())
+        ->map(fn (object $tool): string => $tool::class)
+        ->all();
+
+    expect($toolClasses)->not->toContain(GetSimilarItemsTool::class);
 });
 
 it('instructs the agent to give specific nutritional feedback instead of generic praise', function () {

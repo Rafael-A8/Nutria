@@ -94,6 +94,25 @@ it('returns clarification payload as json when more detail is required', functio
     expect(json_decode($result, true, flags: JSON_THROW_ON_ERROR)['low_confidence_items_text'])->toBe('');
 });
 
+it('does not return registration-ready butter calories for flattened tilapia in butter', function () {
+    $user = User::factory()->create();
+    $tool = new EstimateMealTool($user);
+
+    $result = $tool->handle(new Request([
+        'meal_type' => 'jantar',
+        'consumed_at' => '2026-06-14 20:00:00',
+        'items' => 'description=tilápia grelhada na manteiga; quantity_grams=120; quantity_text=; context=',
+    ]));
+
+    $payload = json_decode($result, true, flags: JSON_THROW_ON_ERROR);
+
+    expect($payload['status'])->toBe('clarification_required')
+        ->and($payload['registration_allowed'])->toBeFalse()
+        ->and($payload['items_for_registration_text'])->toBe('')
+        ->and($result)->not->toContain('calories=860')
+        ->and($result)->not->toContain('description=manteiga; quantity_grams=120');
+});
+
 it('normalizes line items when optional context is missing', function () {
     $user = User::factory()->create();
 

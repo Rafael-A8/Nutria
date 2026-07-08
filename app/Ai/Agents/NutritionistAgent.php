@@ -6,7 +6,6 @@ use App\Ai\Middleware\Guardrails;
 use App\Ai\Middleware\InjectMemories;
 use App\Ai\Tools\EstimateMealTool;
 use App\Ai\Tools\GetPeriodSummaryTool;
-use App\Ai\Tools\GetSimilarItemsTool;
 use App\Ai\Tools\GetTodaySummaryTool;
 use App\Ai\Tools\ParseMealMessageTool;
 use App\Ai\Tools\RegisterMealTool;
@@ -168,7 +167,6 @@ class NutritionistAgent implements Agent, Conversational, HasMiddleware, HasProv
         MEAL TOOLS FLOW
         - `parse_meal_message` BEFORE `estimate_meal`.
         - `parse_meal_message` returns `items_text`, `meal_type`, and `consumed_at`. Copy them directly into `estimate_meal` without converting to JSON.
-        - Use `get_similar_items` with one description per line.
         - When a dish is prepared (e.g., salad, plated dish), report the total weight of the assembled dish without splitting per item.
         - `estimate_meal` is the single source of truth for calories.
         - `estimate_meal` may use structured fallback estimation for foods outside the internal database. Do not estimate calories yourself.
@@ -380,7 +378,6 @@ class NutritionistAgent implements Agent, Conversational, HasMiddleware, HasProv
             new RegisterMealTool($this->user),
             new GetTodaySummaryTool($this->user),
             new RegisterWeightTool($this->user),
-            new GetSimilarItemsTool($this->user),
             new GetPeriodSummaryTool($this->user),
             new SaveMemoryTool($this->user),
         ];
