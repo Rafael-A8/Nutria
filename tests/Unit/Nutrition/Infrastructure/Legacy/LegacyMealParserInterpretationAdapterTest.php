@@ -130,11 +130,16 @@ it('uses the injected timezone and caller source without reading extraction meta
         'consumed_at' => 'invalid timestamp',
         'items' => [],
     ]);
+    $unsafeDraft = $adapter->fromParserResult('arroz no almoço', [
+        'consumed_at' => "2026-07-11\0 12:30:00",
+        'items' => [],
+    ]);
 
     expect($validDraft->source)->toBe('caller_owned_source')
         ->and($validDraft->meal->consumedAt?->format('Y-m-d H:i:s'))->toBe('2026-07-11 12:30:00')
         ->and($validDraft->meal->consumedAt?->getTimezone()->getName())->toBe('America/Sao_Paulo')
         ->and($validDraft->meal->entries)->toHaveCount(1)
         ->and($validDraft->meal->entries[0]->components)->toBe([])
-        ->and($invalidDraft->meal->consumedAt)->toBeNull();
+        ->and($invalidDraft->meal->consumedAt)->toBeNull()
+        ->and($unsafeDraft->meal->consumedAt)->toBeNull();
 });

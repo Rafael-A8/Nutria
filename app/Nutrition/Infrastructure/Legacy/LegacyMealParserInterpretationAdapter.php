@@ -12,6 +12,7 @@ use App\Nutrition\Domain\Enums\QuantityType;
 use App\Nutrition\Domain\ValueObjects\Quantity;
 use DateTimeImmutable;
 use DateTimeZone;
+use ValueError;
 
 final class LegacyMealParserInterpretationAdapter
 {
@@ -48,7 +49,12 @@ final class LegacyMealParserInterpretationAdapter
             return null;
         }
 
-        $consumedAt = DateTimeImmutable::createFromFormat('!Y-m-d H:i:s', $value, $this->timezone);
+        try {
+            $consumedAt = DateTimeImmutable::createFromFormat('!Y-m-d H:i:s', $value, $this->timezone);
+        } catch (ValueError) {
+            return null;
+        }
+
         $errors = DateTimeImmutable::getLastErrors();
 
         if (
