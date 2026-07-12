@@ -1,0 +1,70 @@
+<?php
+
+namespace App\Nutrition\Domain\Catalog\Lifecycle\Enums;
+
+enum CatalogLifecycleReason: string
+{
+    case TransitionApplied = 'transition_applied';
+    case SourceCreated = 'source_created';
+    case SourceUpdated = 'source_updated';
+    case ReferenceCreated = 'reference_created';
+    case DraftCreated = 'draft_created';
+    case DraftUpdated = 'draft_updated';
+    case SuccessorCreated = 'successor_created';
+    case AlreadyPendingReview = 'already_pending_review';
+    case AlreadyApproved = 'already_approved';
+    case AlreadyPublished = 'already_published';
+    case AlreadyActive = 'already_active';
+    case AlreadyDeactivated = 'already_deactivated';
+    case AlreadyWithdrawn = 'already_withdrawn';
+    case AlreadyArchived = 'already_archived';
+    case InvalidTransition = 'invalid_transition';
+    case ContentFrozen = 'content_frozen';
+    case TerminalRejected = 'terminal_rejected';
+    case TerminalWithdrawn = 'terminal_withdrawn';
+    case TerminalArchived = 'terminal_archived';
+    case ActorRequired = 'actor_required';
+    case ReasonRequired = 'reason_required';
+    case IdempotencyKeyInvalid = 'idempotency_key_invalid';
+    case SubjectIdentifierInvalid = 'subject_identifier_invalid';
+    case OccurredAtInvalid = 'occurred_at_invalid';
+    case IncompleteContent = 'incomplete_content';
+    case ParentArchived = 'parent_archived';
+    case ReferenceHasActiveChildren = 'reference_has_active_children';
+    case NotApproved = 'not_approved';
+    case NotPublished = 'not_published';
+    case NutritionIncomplete = 'nutrition_incomplete';
+    case PrimarySourceMissing = 'primary_source_missing';
+    case PrimarySourceNotUnique = 'primary_source_not_unique';
+    case SourceMissing = 'source_missing';
+    case SourceIneligible = 'source_ineligible';
+    case SourceProhibited = 'source_prohibited';
+    case SourceArchived = 'source_archived';
+    case SourceRecordKeyMissing = 'source_record_key_missing';
+    case ProvenanceIncomplete = 'provenance_incomplete';
+    case SourceScopeMismatch = 'source_scope_mismatch';
+    case SourceAlreadyUsed = 'source_already_used';
+    case ConceptIncompatible = 'concept_incompatible';
+    case AliasKindInvalid = 'alias_kind_invalid';
+    case AliasNormalizationMissing = 'alias_normalization_missing';
+    case AliasLocaleMissing = 'alias_locale_missing';
+    case GenericAliasReferenceMismatch = 'generic_alias_reference_mismatch';
+    case BrandAliasGenericReferenceMismatch = 'brand_alias_generic_reference_mismatch';
+    case ActiveAliasConflict = 'active_alias_conflict';
+    case PortionEvidenceInvalid = 'portion_evidence_invalid';
+    case PortionLocaleMissing = 'portion_locale_missing';
+    case ActivePortionConflict = 'active_portion_conflict';
+    case SelfApprovalProhibited = 'self_approval_prohibited';
+    case SupersededPredecessor = 'superseded_predecessor';
+    case SuccessorExists = 'successor_exists';
+    case ParentMismatch = 'parent_mismatch';
+    case LineageMismatch = 'lineage_mismatch';
+    case NotLineageHead = 'not_lineage_head';
+    case NumberConflict = 'number_conflict';
+    case ActiveVersionConflict = 'active_version_conflict';
+    case ConcurrencyConflict = 'concurrency_conflict';
+    case IdempotencyKeyReused = 'idempotency_key_reused';
+    case NotFound = 'not_found';
+    case Unauthorized = 'unauthorized';
+    case CatalogIntegrityViolation = 'catalog_integrity_violation';
+}
