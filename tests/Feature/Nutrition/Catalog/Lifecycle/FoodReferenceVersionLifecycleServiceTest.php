@@ -52,8 +52,31 @@ function versionContextM2344(User $actor): CatalogLifecycleExecutionContext
     return new CatalogLifecycleExecutionContext($actor->id, "audit:user:{$actor->id}");
 }
 
-function completeVersionM2344(User $actor, array $overrides = []): FoodReferenceVersion
+function completeVersionM2344(User $actor, array $overrides = [], ?Closure $configureDraft = null): FoodReferenceVersion
 {
+    $lifecycleColumns = [
+        'review_status',
+        'submitted_at',
+        'submitted_by_user_id',
+        'reviewed_at',
+        'reviewed_by_user_id',
+        'review_reason',
+        'published_at',
+        'published_by_user_id',
+        'activated_at',
+        'activated_by_user_id',
+        'deactivated_at',
+        'deactivated_by_user_id',
+        'deactivation_reason',
+        'withdrawn_at',
+        'withdrawn_by_user_id',
+        'withdrawal_reason',
+        'archived_at',
+        'archived_by_user_id',
+        'archive_reason',
+    ];
+    $lifecycleOverrides = array_intersect_key($overrides, array_flip($lifecycleColumns));
+    $draftOverrides = array_diff_key($overrides, $lifecycleOverrides);
     $reference = FoodReference::factory()->create();
     $version = FoodReferenceVersion::factory()->create(array_replace([
         'food_reference_id' => $reference->id,
@@ -61,13 +84,22 @@ function completeVersionM2344(User $actor, array $overrides = []): FoodReference
         'energy_basis_grams' => '100.0000',
         'energy_kcal' => '120.0000',
         'created_by_user_id' => $actor->id,
-    ], $overrides));
+        'review_status' => 'draft',
+    ], $draftOverrides));
     $source = FoodSource::factory()->eligible()->create();
     FoodReferenceVersionSource::factory()->primary()->create([
         'food_reference_version_id' => $version->id,
         'food_source_id' => $source->id,
         'source_record_key' => 'catalog:primary',
     ]);
+
+    if ($configureDraft !== null) {
+        $configureDraft($version);
+    }
+
+    if ($lifecycleOverrides !== []) {
+        $version->forceFill($lifecycleOverrides)->save();
+    }
 
     return $version;
 }
@@ -199,18 +231,37 @@ it('activates eligible published knowledge and does not replace an active confli
 
 it('audits activation blockers without projection mutation', function (string $blocker, CatalogLifecycleReason $reason) {
     $actor = User::factory()->create();
-    $version = completeVersionM2344($actor, ['review_status' => 'approved', 'reviewed_at' => now(), 'published_at' => now()]);
+    $version = completeVersionM2344(
+        $actor,
+        ['review_status' => 'approved', 'reviewed_at' => now(), 'published_at' => now()],
+        function (FoodReferenceVersion $draftVersion) use ($blocker): void {
+            if ($blocker === 'nutrition') {
+                $draftVersion->update(['energy_kcal' => null]);
+            }
+
+            if ($blocker === 'missing_source') {
+                $draftVersion->sourceLinks()->delete();
+            }
+
+            if (in_array($blocker, ['app_generated', 'scope'], true)) {
+                $draftVersion->sourceLinks()->delete();
+                $replacementSource = $blocker === 'app_generated'
+                    ? FoodSource::factory()->eligible()->create(['kind' => 'app_generated_estimate'])
+                    : FoodSource::factory()->privateFor(User::factory()->create())->eligible()->create();
+
+                FoodReferenceVersionSource::factory()->primary()->create([
+                    'food_reference_version_id' => $draftVersion->id,
+                    'food_source_id' => $replacementSource->id,
+                    'source_record_key' => 'catalog:replacement',
+                ]);
+            }
+        },
+    );
 
     match ($blocker) {
-        'nutrition' => $version->update(['energy_kcal' => null]),
         'source' => $version->sourceLinks()->first()->source()->update(['authority_status' => 'untrusted']),
-        'missing_source' => $version->sourceLinks()->delete(),
-        'app_generated' => $version->sourceLinks()->first()->source()->update(['kind' => 'app_generated_estimate']),
         'archived_source' => $version->sourceLinks()->first()->source()->update(['archived_at' => now()]),
         'parent' => $version->reference()->update(['archived_at' => now()]),
-        'scope' => $version->sourceLinks()->first()->update([
-            'food_source_id' => FoodSource::factory()->privateFor(User::factory()->create())->eligible()->create()->id,
-        ]),
         'active_conflict' => FoodReferenceVersion::factory()->active()->create([
             'food_reference_id' => $version->food_reference_id, 'version_number' => 2,
         ]),
@@ -218,6 +269,7 @@ it('audits activation blockers without projection mutation', function (string $b
             'food_reference_id' => $version->food_reference_id, 'version_number' => 2,
             'supersedes_food_reference_version_id' => $version->id,
         ]),
+        default => null,
     };
 
     $execution = versionServiceM2344()->activate(
