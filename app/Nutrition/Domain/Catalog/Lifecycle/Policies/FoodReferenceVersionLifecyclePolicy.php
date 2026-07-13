@@ -222,7 +222,7 @@ final class FoodReferenceVersionLifecyclePolicy implements CatalogLifecyclePolic
             return $this->validationFailure($snapshot, [CatalogLifecycleReason::ConceptIncompatible]);
         }
 
-        return CatalogLifecycleResult::succeeded(CatalogLifecycleReason::SuccessorCreated, $snapshot->state, CatalogLifecycleState::Draft);
+        return CatalogLifecycleResult::succeeded(CatalogLifecycleReason::SuccessorCreated, $snapshot->state, $snapshot->state);
     }
 
     private function transition(

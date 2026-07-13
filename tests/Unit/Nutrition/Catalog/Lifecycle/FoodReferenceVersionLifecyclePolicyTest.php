@@ -173,14 +173,40 @@ it('returns stable semantic no ops', function (CatalogLifecycleOperation $operat
     [CatalogLifecycleOperation::Archive, CatalogLifecycleState::Archived, CatalogLifecycleReason::AlreadyArchived],
 ]);
 
-it('permits successors from approved rejected and withdrawn predecessors', function (CatalogLifecycleState $state) {
+it('creates a successor without transitioning the version predecessor', function (CatalogLifecycleState $state) {
     $result = (new FoodReferenceVersionLifecyclePolicy)->evaluate(
         versionCommandForM2342(CatalogLifecycleOperation::CreateSuccessor),
         versionSnapshotForM2342($state),
     );
 
-    expect($result->reason)->toBe(CatalogLifecycleReason::SuccessorCreated)->and($result->nextState)->toBe(CatalogLifecycleState::Draft);
-})->with([CatalogLifecycleState::Approved, CatalogLifecycleState::Rejected, CatalogLifecycleState::Withdrawn]);
+    expect($result->outcome)->toBe(CatalogLifecycleOutcome::Succeeded)
+        ->not->toBe(CatalogLifecycleOutcome::NoOp)
+        ->and($result->reason)->toBe(CatalogLifecycleReason::SuccessorCreated)
+        ->and($result->previousState)->toBe($state)
+        ->and($result->nextState)->toBe($state);
+})->with([
+    CatalogLifecycleState::Approved,
+    CatalogLifecycleState::Rejected,
+    CatalogLifecycleState::PublishedInactive,
+    CatalogLifecycleState::Active,
+    CatalogLifecycleState::Deactivated,
+    CatalogLifecycleState::Withdrawn,
+]);
+
+it('blocks successors from invalid version predecessor states', function (CatalogLifecycleState $state) {
+    $result = (new FoodReferenceVersionLifecyclePolicy)->evaluate(
+        versionCommandForM2342(CatalogLifecycleOperation::CreateSuccessor),
+        versionSnapshotForM2342($state),
+    );
+
+    expect($result->outcome)->toBe(CatalogLifecycleOutcome::InvalidTransition)
+        ->and($result->previousState)->toBe($state)
+        ->and($result->nextState)->toBe($state);
+})->with([
+    CatalogLifecycleState::Draft,
+    CatalogLifecycleState::PendingReview,
+    CatalogLifecycleState::Archived,
+]);
 
 it('validates successor parent numbering and uniqueness', function (array $overrides, CatalogLifecycleReason $reason) {
     $result = (new FoodReferenceVersionLifecyclePolicy)->evaluate(
@@ -191,6 +217,8 @@ it('validates successor parent numbering and uniqueness', function (array $overr
     expect($result->reason)->toBe($reason);
 })->with([
     'wrong parent' => [['successorParentMatches' => false], CatalogLifecycleReason::ParentMismatch],
+    'not reference head' => [['isReferenceHead' => false], CatalogLifecycleReason::NotLineageHead],
     'noncontiguous number' => [['successorNumberIsContiguous' => false], CatalogLifecycleReason::NumberConflict],
     'successor exists' => [['hasSuccessor' => true], CatalogLifecycleReason::SuccessorExists],
+    'incompatible concept' => [['conceptCompatible' => false], CatalogLifecycleReason::ConceptIncompatible],
 ]);

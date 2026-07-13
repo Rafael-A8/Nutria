@@ -104,22 +104,55 @@ it('reports same-reference active portion conflict', function () {
         ->and($result->reason)->toBe(CatalogLifecycleReason::ActivePortionConflict);
 });
 
-it('creates successors from rejected predecessors only with matching lineage and revision', function () {
-    $policy = new FoodPortionLifecyclePolicy;
-
-    expect($policy->evaluate(
+it('creates a successor without transitioning the portion predecessor', function (CatalogLifecycleState $state) {
+    $result = (new FoodPortionLifecyclePolicy)->evaluate(
         portionCommandForM2342(CatalogLifecycleOperation::CreateSuccessor),
-        portionSnapshotForM2342(CatalogLifecycleState::Rejected),
-    ))->reason->toBe(CatalogLifecycleReason::SuccessorCreated)
-        ->and($policy->evaluate(
-            portionCommandForM2342(CatalogLifecycleOperation::CreateSuccessor),
-            portionSnapshotForM2342(CatalogLifecycleState::Rejected, ['successorLineageMatches' => false]),
-        ))->reason->toBe(CatalogLifecycleReason::LineageMismatch)
-        ->and($policy->evaluate(
-            portionCommandForM2342(CatalogLifecycleOperation::CreateSuccessor),
-            portionSnapshotForM2342(CatalogLifecycleState::Rejected, ['successorNumberIsContiguous' => false]),
-        ))->reason->toBe(CatalogLifecycleReason::NumberConflict);
-});
+        portionSnapshotForM2342($state),
+    );
+
+    expect($result->outcome)->toBe(CatalogLifecycleOutcome::Succeeded)
+        ->not->toBe(CatalogLifecycleOutcome::NoOp)
+        ->and($result->reason)->toBe(CatalogLifecycleReason::SuccessorCreated)
+        ->and($result->previousState)->toBe($state)
+        ->and($result->nextState)->toBe($state);
+})->with([
+    CatalogLifecycleState::Approved,
+    CatalogLifecycleState::Rejected,
+    CatalogLifecycleState::PublishedInactive,
+    CatalogLifecycleState::Active,
+    CatalogLifecycleState::Deactivated,
+    CatalogLifecycleState::Withdrawn,
+]);
+
+it('blocks successors from invalid portion predecessor states', function (CatalogLifecycleState $state) {
+    $result = (new FoodPortionLifecyclePolicy)->evaluate(
+        portionCommandForM2342(CatalogLifecycleOperation::CreateSuccessor),
+        portionSnapshotForM2342($state),
+    );
+
+    expect($result->outcome)->toBe(CatalogLifecycleOutcome::InvalidTransition)
+        ->and($result->previousState)->toBe($state)
+        ->and($result->nextState)->toBe($state);
+})->with([
+    CatalogLifecycleState::Draft,
+    CatalogLifecycleState::PendingReview,
+    CatalogLifecycleState::Archived,
+]);
+
+it('preserves portion successor conflicts and validation', function (array $overrides, CatalogLifecycleReason $reason) {
+    $result = (new FoodPortionLifecyclePolicy)->evaluate(
+        portionCommandForM2342(CatalogLifecycleOperation::CreateSuccessor),
+        portionSnapshotForM2342(CatalogLifecycleState::Rejected, $overrides),
+    );
+
+    expect($result->reason)->toBe($reason);
+})->with([
+    'successor exists' => [['hasSuccessor' => true], CatalogLifecycleReason::SuccessorExists],
+    'not lineage head' => [['isLineageHead' => false], CatalogLifecycleReason::NotLineageHead],
+    'wrong parent' => [['successorParentMatches' => false], CatalogLifecycleReason::ParentMismatch],
+    'wrong lineage' => [['successorLineageMatches' => false], CatalogLifecycleReason::LineageMismatch],
+    'noncontiguous revision' => [['successorNumberIsContiguous' => false], CatalogLifecycleReason::NumberConflict],
+]);
 
 it('does not expose serving defaults or conversion outputs in the snapshot', function () {
     $properties = array_map(

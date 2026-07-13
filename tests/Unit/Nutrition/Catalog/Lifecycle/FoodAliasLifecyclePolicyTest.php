@@ -130,16 +130,55 @@ it('treats only same-reference active key collision as a conflict', function () 
         ->and($crossReferenceAmbiguity->outcome)->toBe(CatalogLifecycleOutcome::Succeeded);
 });
 
-it('creates a successor from a rejected predecessor with matching lineage and revision', function () {
-    $policy = new FoodAliasLifecyclePolicy;
-    $success = $policy->evaluate(aliasCommandForM2342(CatalogLifecycleOperation::CreateSuccessor), aliasSnapshotForM2342(CatalogLifecycleState::Rejected));
-    $lineageFailure = $policy->evaluate(aliasCommandForM2342(CatalogLifecycleOperation::CreateSuccessor), aliasSnapshotForM2342(CatalogLifecycleState::Rejected, ['successorLineageMatches' => false]));
-    $revisionFailure = $policy->evaluate(aliasCommandForM2342(CatalogLifecycleOperation::CreateSuccessor), aliasSnapshotForM2342(CatalogLifecycleState::Rejected, ['successorNumberIsContiguous' => false]));
+it('creates a successor without transitioning the alias predecessor', function (CatalogLifecycleState $state) {
+    $result = (new FoodAliasLifecyclePolicy)->evaluate(
+        aliasCommandForM2342(CatalogLifecycleOperation::CreateSuccessor),
+        aliasSnapshotForM2342($state),
+    );
 
-    expect($success->reason)->toBe(CatalogLifecycleReason::SuccessorCreated)
-        ->and($lineageFailure->reason)->toBe(CatalogLifecycleReason::LineageMismatch)
-        ->and($revisionFailure->reason)->toBe(CatalogLifecycleReason::NumberConflict);
-});
+    expect($result->outcome)->toBe(CatalogLifecycleOutcome::Succeeded)
+        ->not->toBe(CatalogLifecycleOutcome::NoOp)
+        ->and($result->reason)->toBe(CatalogLifecycleReason::SuccessorCreated)
+        ->and($result->previousState)->toBe($state)
+        ->and($result->nextState)->toBe($state);
+})->with([
+    CatalogLifecycleState::Approved,
+    CatalogLifecycleState::Rejected,
+    CatalogLifecycleState::PublishedInactive,
+    CatalogLifecycleState::Active,
+    CatalogLifecycleState::Deactivated,
+    CatalogLifecycleState::Withdrawn,
+]);
+
+it('blocks successors from invalid alias predecessor states', function (CatalogLifecycleState $state) {
+    $result = (new FoodAliasLifecyclePolicy)->evaluate(
+        aliasCommandForM2342(CatalogLifecycleOperation::CreateSuccessor),
+        aliasSnapshotForM2342($state),
+    );
+
+    expect($result->outcome)->toBe(CatalogLifecycleOutcome::InvalidTransition)
+        ->and($result->previousState)->toBe($state)
+        ->and($result->nextState)->toBe($state);
+})->with([
+    CatalogLifecycleState::Draft,
+    CatalogLifecycleState::PendingReview,
+    CatalogLifecycleState::Archived,
+]);
+
+it('preserves alias successor conflicts and validation', function (array $overrides, CatalogLifecycleReason $reason) {
+    $result = (new FoodAliasLifecyclePolicy)->evaluate(
+        aliasCommandForM2342(CatalogLifecycleOperation::CreateSuccessor),
+        aliasSnapshotForM2342(CatalogLifecycleState::Rejected, $overrides),
+    );
+
+    expect($result->reason)->toBe($reason);
+})->with([
+    'successor exists' => [['hasSuccessor' => true], CatalogLifecycleReason::SuccessorExists],
+    'not lineage head' => [['isLineageHead' => false], CatalogLifecycleReason::NotLineageHead],
+    'wrong parent' => [['successorParentMatches' => false], CatalogLifecycleReason::ParentMismatch],
+    'wrong lineage' => [['successorLineageMatches' => false], CatalogLifecycleReason::LineageMismatch],
+    'noncontiguous revision' => [['successorNumberIsContiguous' => false], CatalogLifecycleReason::NumberConflict],
+]);
 
 it('reactivates only deactivated aliases after complete revalidation', function () {
     $result = (new FoodAliasLifecyclePolicy)->evaluate(

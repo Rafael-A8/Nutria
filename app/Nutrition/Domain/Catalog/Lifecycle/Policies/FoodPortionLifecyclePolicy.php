@@ -177,7 +177,7 @@ final class FoodPortionLifecyclePolicy implements CatalogLifecyclePolicy
             return CatalogLifecycleResult::conflict(CatalogLifecycleReason::NumberConflict, $snapshot->state);
         }
 
-        return CatalogLifecycleResult::succeeded(CatalogLifecycleReason::SuccessorCreated, $snapshot->state, CatalogLifecycleState::Draft);
+        return CatalogLifecycleResult::succeeded(CatalogLifecycleReason::SuccessorCreated, $snapshot->state, $snapshot->state);
     }
 
     private function transition(FoodPortionLifecycleSnapshot $snapshot, CatalogLifecycleState $requiredState, CatalogLifecycleState $nextState): CatalogLifecycleResult

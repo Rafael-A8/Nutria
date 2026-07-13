@@ -184,7 +184,7 @@ final class FoodAliasLifecyclePolicy implements CatalogLifecyclePolicy
             return CatalogLifecycleResult::conflict(CatalogLifecycleReason::NumberConflict, $snapshot->state);
         }
 
-        return CatalogLifecycleResult::succeeded(CatalogLifecycleReason::SuccessorCreated, $snapshot->state, CatalogLifecycleState::Draft);
+        return CatalogLifecycleResult::succeeded(CatalogLifecycleReason::SuccessorCreated, $snapshot->state, $snapshot->state);
     }
 
     private function transition(FoodAliasLifecycleSnapshot $snapshot, CatalogLifecycleState $requiredState, CatalogLifecycleState $nextState): CatalogLifecycleResult
