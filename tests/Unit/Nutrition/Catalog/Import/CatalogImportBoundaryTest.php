@@ -17,6 +17,8 @@ use App\Nutrition\Application\Catalog\Import\ValueObjects\CatalogImportSemanticG
 use App\Nutrition\Application\Catalog\Import\ValueObjects\ConceptualStableKey;
 use App\Nutrition\Application\Catalog\Import\ValueObjects\LegacyCatalogArtifactDescriptor;
 use App\Nutrition\Application\Catalog\Import\ValueObjects\LegacyCatalogSourceLinkSemantics;
+use App\Nutrition\Application\Catalog\Import\ValueObjects\LegacyNutritionPlanningResult;
+use App\Nutrition\Application\Catalog\Import\ValueObjects\LoadedLegacyNutritionSource;
 use App\Nutrition\Application\Catalog\Import\ValueObjects\SourceArtifactChecksum;
 
 /** @return list<string> */
@@ -53,6 +55,8 @@ it('keeps every concrete import value object final readonly', function () {
         ConceptualStableKey::class,
         LegacyCatalogArtifactDescriptor::class,
         LegacyCatalogSourceLinkSemantics::class,
+        LegacyNutritionPlanningResult::class,
+        LoadedLegacyNutritionSource::class,
         SourceArtifactChecksum::class,
     ] as $class) {
         $reflection = new ReflectionClass($class);
@@ -117,4 +121,34 @@ it('does not contain superseded M2.4.1a UUID inputs or results', function () {
 it('keeps mutable artifact evidence out of protocol constants', function () {
     expect((new ReflectionClass(LegacyCatalogArtifactDescriptor::class))->getConstants())
         ->toBe(['ARTIFACT_ID' => 'legacy_config_nutrition_v1']);
+});
+
+it('keeps M2.4.3 extraction isolated from persistence lifecycle runtime and nutrition authorities', function () {
+    $productionFiles = [
+        dirname(__DIR__, 5).'/app/Console/Commands/PlanLegacyCatalogImportCommand.php',
+        ...catalogImportFilesM242(),
+    ];
+    $source = implode("\n", array_map(
+        fn (string $file): string => file_get_contents($file) ?: '',
+        $productionFiles,
+    ));
+
+    expect($source)
+        ->not->toMatch('/App\\\\Models|Eloquent|Infrastructure\\\\|FoodCatalogCandidateRepository|MealComponentResolver/i')
+        ->not->toMatch('/DB::|Database\\\\|::query\s*\(|->query\s*\(|transaction\s*\(|lockForUpdate/i')
+        ->not->toMatch('/LifecycleService|EventStore|SupersessionService|CatalogLifecycleCommandFingerprint/i')
+        ->not->toMatch('/NutritionEstimate|MealService|EstimateMeal|meal_items|\bmeals\b/i')
+        ->not->toMatch('/Laravel\\\\Ai|App\\\\Ai|\bLLM\b|\bRAG\b|embedding|memory|history/i')
+        ->not->toMatch('/Http::|curl_|file_get_contents\s*\(\s*[\'"]https?:|eval\s*\(/i');
+});
+
+it('keeps the M2.4.3 command orchestration free of database and lifecycle calls', function () {
+    $commandSource = file_get_contents(
+        dirname(__DIR__, 5).'/app/Console/Commands/PlanLegacyCatalogImportCommand.php',
+    ) ?: '';
+
+    expect($commandSource)
+        ->not->toMatch('/DB::|Database|Eloquent|Model|transaction|query|migrate|seed|tinker/i')
+        ->not->toMatch('/Lifecycle|EventStore|Supersession|Policy|FoodSource|FoodReference|FoodAlias|FoodPortion/i')
+        ->not->toMatch('/Meal|Estimate|Resolver|Laravel\\\\Ai|App\\\\Ai|\bRAG\b|embedding|memory|history/i');
 });
