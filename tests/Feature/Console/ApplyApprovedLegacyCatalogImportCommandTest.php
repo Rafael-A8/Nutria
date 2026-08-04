@@ -360,11 +360,11 @@ it('applies the exact approved graph once and replays it without mutations', fun
         $beforeReplay['links'],
         $beforeReplay['aliases'],
     ])->and(CatalogLifecycleEvent::query()->count())->toBe(10)
-        ->and(count($replayQueries))->toBe(21)
-        ->and(statementProfileM245($replayQueries))->toBe(['select' => 21]);
+        ->and(count($replayQueries))->toBe(22)
+        ->and(statementProfileM245($replayQueries))->toBe(['select' => 22]);
 
-    expect(count($firstApplyQueries))->toBe(67)
-        ->and(statementProfileM245($firstApplyQueries))->toBe(['insert' => 23, 'select' => 44]);
+    expect(count($firstApplyQueries))->toBe(68)
+        ->and(statementProfileM245($firstApplyQueries))->toBe(['insert' => 23, 'select' => 45]);
 
     $rawOptions = [];
 
@@ -437,8 +437,8 @@ it('replays an exact graph independently from the new execution context', functi
             $replayOccurredAt === '2026-08-02T20:30:00.123456Z' ? 10 : 0,
         )
         ->and(CatalogLifecycleEvent::query()->count())->toBe(10)
-        ->and(count($queries))->toBe(21)
-        ->and(statementProfileM245($queries))->toBe(['select' => 21]);
+        ->and(count($queries))->toBe(22)
+        ->and(statementProfileM245($queries))->toBe(['select' => 22]);
 })->with([
     'different actor ID' => [true, []],
     'different actor reference' => [false, [
@@ -550,8 +550,8 @@ it('replays the exact approved graph alongside unrelated catalog rows and lifecy
             FoodAlias::query()->count(),
             CatalogLifecycleEvent::query()->count(),
         ])->toBe([2, 4, 4, 4, 4, 11])
-        ->and(count($queries))->toBe(21)
-        ->and(statementProfileM245($queries))->toBe(['select' => 21]);
+        ->and(count($queries))->toBe(22)
+        ->and(statementProfileM245($queries))->toBe(['select' => 22]);
 });
 
 it('returns catalog drift for an absent approved graph on a changed initial snapshot', function () {
@@ -570,8 +570,8 @@ it('returns catalog drift for an absent approved graph on a changed initial snap
     expect(FoodSource::query()->count())->toBe(1)
         ->and(FoodReference::query()->count())->toBe(0)
         ->and(CatalogLifecycleEvent::query()->count())->toBe(0)
-        ->and(count($queries))->toBe(12)
-        ->and(statementProfileM245($queries))->toBe(['select' => 12]);
+        ->and(count($queries))->toBe(13)
+        ->and(statementProfileM245($queries))->toBe(['select' => 13]);
 });
 
 it('returns catalog conflict for a deterministic source with differing semantics without writes', function () {
@@ -606,8 +606,8 @@ it('returns catalog conflict for a deterministic source with differing semantics
         FoodAlias::query()->count(),
         CatalogLifecycleEvent::query()->count(),
     ])->toBe($before)
-        ->and(count($queries))->toBe(12)
-        ->and(statementProfileM245($queries))->toBe(['select' => 12]);
+        ->and(count($queries))->toBe(13)
+        ->and(statementProfileM245($queries))->toBe(['select' => 13]);
 });
 
 it('returns catalog conflict for an approved stable key on another public UUID without writes', function () {
@@ -627,8 +627,8 @@ it('returns catalog conflict for an approved stable key on another public UUID w
     expect(FoodReference::query()->count())->toBe($before)
         ->and(FoodSource::query()->count())->toBe(0)
         ->and(CatalogLifecycleEvent::query()->count())->toBe(0)
-        ->and(count($queries))->toBe(13)
-        ->and(statementProfileM245($queries))->toBe(['select' => 13]);
+        ->and(count($queries))->toBe(14)
+        ->and(statementProfileM245($queries))->toBe(['select' => 14]);
 });
 
 it('returns catalog conflict for a partial exact source and reference graph', function () {

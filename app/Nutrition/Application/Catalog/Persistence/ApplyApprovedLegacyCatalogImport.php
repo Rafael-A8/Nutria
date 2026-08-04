@@ -8,9 +8,11 @@ use App\Nutrition\Application\Catalog\Import\Enums\ApprovedCatalogImportOutcome;
 use App\Nutrition\Application\Catalog\Import\Exceptions\ApprovedCatalogImportPostWriteVerificationException;
 use App\Nutrition\Application\Catalog\Import\ValueObjects\ApprovedCatalogImportApplyResult;
 use App\Nutrition\Application\Catalog\Import\ValueObjects\ApprovedCatalogImportExecutionInput;
+use App\Nutrition\Application\Catalog\Import\ValueObjects\LegacyCatalogArtifactDescriptor;
 use App\Nutrition\Application\Catalog\Import\ValueObjects\LoadedApprovedCatalogImportArtifacts;
 use App\Nutrition\Infrastructure\Catalog\Import\ApprovedCatalogImportGraphInspector;
 use App\Nutrition\Infrastructure\Catalog\Import\ApprovedCatalogImportTransactionalGraphWriter;
+use App\Nutrition\Infrastructure\Catalog\Import\ApprovedCatalogImportTransactionLock;
 use Illuminate\Support\Facades\DB;
 use Throwable;
 
@@ -18,6 +20,7 @@ final class ApplyApprovedLegacyCatalogImport
 {
     public function __construct(
         private ApprovedCatalogImportGraphInspector $inspector,
+        private ApprovedCatalogImportTransactionLock $transactionLock,
         private ApprovedCatalogImportTransactionalGraphWriter $writer,
     ) {}
 
@@ -26,8 +29,13 @@ final class ApplyApprovedLegacyCatalogImport
         ApprovedCatalogImportExecutionInput $input,
     ): ApprovedCatalogImportApplyResult {
         try {
-            return DB::connection()->transaction(function () use ($artifacts, $input): ApprovedCatalogImportApplyResult {
-                $actorExists = User::query()->select('id')->whereKey($input->actorId)->exists();
+            $connection = DB::connection();
+
+            return $connection->transaction(function () use ($artifacts, $connection, $input): ApprovedCatalogImportApplyResult {
+                $actorExists = $connection
+                    ->table((new User)->getTable())
+                    ->where('id', $input->actorId)
+                    ->exists();
 
                 if (! $actorExists) {
                     return new ApprovedCatalogImportApplyResult(
@@ -36,6 +44,7 @@ final class ApplyApprovedLegacyCatalogImport
                     );
                 }
 
+                $this->transactionLock->acquire($connection, LegacyCatalogArtifactDescriptor::ARTIFACT_ID);
                 $inspection = $this->inspector->inspect($artifacts);
 
                 if ($inspection->state === ApprovedCatalogImportGraphState::Exact) {

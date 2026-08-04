@@ -11,6 +11,7 @@ use App\Nutrition\Application\Catalog\Import\ValueObjects\LoadedApprovedCatalogI
 use App\Nutrition\Application\Catalog\Persistence\ApplyApprovedLegacyCatalogImport;
 use App\Nutrition\Infrastructure\Catalog\Import\ApprovedCatalogImportGraphInspector;
 use App\Nutrition\Infrastructure\Catalog\Import\ApprovedCatalogImportTransactionalGraphWriter;
+use App\Nutrition\Infrastructure\Catalog\Import\ApprovedCatalogImportTransactionLock;
 
 function sourceForM245(string $relativePath): string
 {
@@ -38,6 +39,7 @@ it('keeps the command use case inspector and writer narrow and final', function 
         ApprovedCatalogImportApplyPlanLoader::class,
         ApprovedCatalogImportArtifactsLoader::class,
         ApprovedCatalogImportGraphInspector::class,
+        ApprovedCatalogImportTransactionLock::class,
         ApprovedCatalogImportTransactionalGraphWriter::class,
     ] as $class) {
         expect((new ReflectionClass($class))->isFinal())->toBeTrue();
@@ -61,8 +63,11 @@ it('uses one outer transaction attempt and no alternate mutation mechanism', fun
     $command = sourceForM245('app/Console/Commands/ApplyApprovedLegacyCatalogImportCommand.php');
     $combined = $useCase.$writer.$command;
 
-    expect($useCase)->toContain('transaction(function ()', 'attempts: 1')
-        ->not->toContain('attempts: 2', 'attempts: 3', 'lockForUpdate', 'advisory')
+    expect($useCase)->toContain(
+        'transaction(function ()',
+        'attempts: 1',
+        '$this->transactionLock->acquire',
+    )->not->toContain('attempts: 2', 'attempts: 3', 'lockForUpdate')
         ->and($writer)->toContain(
             'FoodSourceLifecyclePolicy',
             'FoodReferenceLifecyclePolicy',
